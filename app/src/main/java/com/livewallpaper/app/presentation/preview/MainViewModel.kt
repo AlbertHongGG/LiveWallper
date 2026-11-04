@@ -7,8 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.livewallpaper.app.data.metadata.VideoMetadataRetriever
-import com.livewallpaper.app.domain.model.DownloadProgress
 import com.livewallpaper.app.domain.model.ExtractorFailure
+import com.livewallpaper.app.domain.model.MediaTaskProgress
 import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
@@ -52,14 +52,25 @@ sealed interface WallpaperStageState {
 }
 
 /**
- * 下載與解析狀態模型。
+ * 媒體處理與載入任務之 UI 狀態機。
+ * 明確分離「閒置」、「遠端影片解析下載」與「相簿本地影片匯入」，消滅職責與文字混淆。
  */
-data class DownloadUiState(
-    val isDownloading: Boolean = false,
-    val progress: Float? = null,
-    val status: String? = null,
-    val speed: String? = null
-)
+sealed interface MediaTaskUiState {
+    /** 閒置狀態（無進行中任務） */
+    data object Idle : MediaTaskUiState
+
+    /** 本地相簿影片匯入處理中 */
+    data class LocalImporting(
+        val statusMessage: String = "正在匯入本地影片..."
+    ) : MediaTaskUiState
+
+    /** 遠端網路影片解析與下載中 */
+    data class RemoteDownloading(
+        val statusMessage: String,
+        val progressPercent: Float? = null,
+        val speedText: String? = null
+    ) : MediaTaskUiState
+}
 
 sealed interface MainUiEffect {
     data object RequestSetWallpaperIntent : MainUiEffect
@@ -85,9 +96,9 @@ class MainViewModel(
     private val _urlInput = MutableStateFlow("")
     val urlInput: StateFlow<String> = _urlInput.asStateFlow()
 
-    // 3. 獨立的下載進度狀態流
-    private val _downloadState = MutableStateFlow(DownloadUiState())
-    val downloadState: StateFlow<DownloadUiState> = _downloadState.asStateFlow()
+    // 3. 獨立的媒體任務進度狀態流
+    private val _mediaTaskState = MutableStateFlow<MediaTaskUiState>(MediaTaskUiState.Idle)
+    val mediaTaskState: StateFlow<MediaTaskUiState> = _mediaTaskState.asStateFlow()
 
     // 4. 原桌布防護備份引導對話框狀態
     private val _showPermissionPrompt = MutableStateFlow(false)
@@ -97,7 +108,7 @@ class MainViewModel(
     val effect: Flow<MainUiEffect> = _effect.receiveAsFlow()
 
     private var currentConfigSnapshot: WallpaperConfig = WallpaperConfig()
-    private var downloadJob: Job? = null
+    private var mediaTaskJob: Job? = null
     private var pendingApplyConfig: WallpaperConfig? = null
     private var pendingOnFinished: (() -> Unit)? = null
 
@@ -159,13 +170,15 @@ class MainViewModel(
     }
 
     fun handleVideoSource(source: VideoSource) {
-        downloadJob?.cancel()
-        _downloadState.value = DownloadUiState(
-            isDownloading = true,
-            status = "準備中..."
-        )
+        mediaTaskJob?.cancel()
 
-        downloadJob = viewModelScope.launch {
+        // 依來源型態初始化對應任務狀態，相簿匯入絕不混為「下載」
+        _mediaTaskState.value = when (source) {
+            is VideoSource.LocalUri -> MediaTaskUiState.LocalImporting(statusMessage = "正在匯入本地影片...")
+            is VideoSource.RemoteShared -> MediaTaskUiState.RemoteDownloading(statusMessage = "正在辨識與解析網址...")
+        }
+
+        mediaTaskJob = viewModelScope.launch {
             processVideoSourceUseCase(source)
                 .catch { exception ->
                     val errorMsg = when (exception) {
@@ -183,39 +196,49 @@ class MainViewModel(
                         is WallpaperError.StorageError -> exception.message ?: "儲存空間異常"
                         else -> exception.localizedMessage ?: "處理失敗"
                     }
-                    _downloadState.value = DownloadUiState(isDownloading = false)
+                    _mediaTaskState.value = MediaTaskUiState.Idle
                     NotificationController.showError(errorMsg)
                 }
                 .collect { progress ->
                     when (progress) {
-                        is DownloadProgress.Preparing -> {
-                            _downloadState.value = DownloadUiState(
-                                isDownloading = true,
-                                status = progress.stageMessage
+                        is MediaTaskProgress.LocalImport.Preparing -> {
+                            _mediaTaskState.value = MediaTaskUiState.LocalImporting(
+                                statusMessage = progress.message
                             )
                         }
 
-                        is DownloadProgress.SelfHealing -> {
-                            _downloadState.value = DownloadUiState(
-                                isDownloading = true,
-                                status = progress.message
+                        is MediaTaskProgress.LocalImport.Analyzing -> {
+                            _mediaTaskState.value = MediaTaskUiState.LocalImporting(
+                                statusMessage = progress.message
+                            )
+                        }
+
+                        is MediaTaskProgress.RemoteDownload.Preparing -> {
+                            _mediaTaskState.value = MediaTaskUiState.RemoteDownloading(
+                                statusMessage = progress.stageMessage
+                            )
+                        }
+
+                        is MediaTaskProgress.RemoteDownload.SelfHealing -> {
+                            _mediaTaskState.value = MediaTaskUiState.RemoteDownloading(
+                                statusMessage = progress.message
                             )
                             NotificationController.showInfo(progress.message)
                         }
 
-                        is DownloadProgress.Downloading -> {
-                            _downloadState.value = DownloadUiState(
-                                isDownloading = true,
-                                progress = progress.progressPercent,
-                                status = "下載中 ${progress.progressPercent.toInt()}%",
-                                speed = progress.speedText
+                        is MediaTaskProgress.RemoteDownload.Downloading -> {
+                            _mediaTaskState.value = MediaTaskUiState.RemoteDownloading(
+                                statusMessage = "下載中 ${progress.progressPercent.toInt()}%",
+                                progressPercent = progress.progressPercent,
+                                speedText = progress.speedText
                             )
                         }
 
-                        is DownloadProgress.Completed -> {
-                            _downloadState.value = DownloadUiState(isDownloading = false)
+                        is MediaTaskProgress.Completed -> {
+                            _mediaTaskState.value = MediaTaskUiState.Idle
                             _urlInput.value = ""
-                            NotificationController.showSuccess("影片解析載入成功")
+                            val successMsg = if (source is VideoSource.LocalUri) "本地影片匯入成功" else "影片解析載入成功"
+                            NotificationController.showSuccess(successMsg)
                             _effect.send(MainUiEffect.NavigateToEditor(progress.outputFile.absolutePath))
                         }
                     }
@@ -223,11 +246,18 @@ class MainViewModel(
         }
     }
 
-    fun cancelDownload() {
-        downloadJob?.cancel()
-        _downloadState.value = DownloadUiState(isDownloading = false)
-        NotificationController.showInfo("已取消下載")
+    fun cancelTask() {
+        val current = _mediaTaskState.value
+        mediaTaskJob?.cancel()
+        _mediaTaskState.value = MediaTaskUiState.Idle
+        when (current) {
+            is MediaTaskUiState.LocalImporting -> NotificationController.showInfo("已取消匯入")
+            is MediaTaskUiState.RemoteDownloading -> NotificationController.showInfo("已取消下載")
+            MediaTaskUiState.Idle -> Unit
+        }
     }
+
+    fun cancelDownload() = cancelTask()
 
     fun checkAndCaptureSnapshot() {
         viewModelScope.launch {

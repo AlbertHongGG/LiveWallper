@@ -43,7 +43,7 @@ class SettingsViewModel(
 
     fun refreshStats() {
         viewModelScope.launch {
-            // 讀取 yt-dlp 核心版本
+            // 讀取 yt-dlp 核心版本、權限、快照
             val version = extractorEngineManager.getEngineVersion()
             val hasPermission = wallpaperPermissionManager.hasBackupPermission()
             val hasSnapshot = wallpaperSystemManager.hasSnapshot()

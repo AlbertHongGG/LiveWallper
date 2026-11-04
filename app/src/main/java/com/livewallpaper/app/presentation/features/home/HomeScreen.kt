@@ -30,9 +30,11 @@ import androidx.compose.ui.unit.sp
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.presentation.components.ImmersiveScaffold
 import com.livewallpaper.app.presentation.components.NavigationBarsSafeSpacer
+import com.livewallpaper.app.presentation.features.home.components.MediaTaskProgressDock
 import com.livewallpaper.app.presentation.features.home.components.UrlInputField
 import com.livewallpaper.app.presentation.features.home.components.WallpaperStage
 import com.livewallpaper.app.presentation.preview.MainViewModel
+import com.livewallpaper.app.presentation.preview.MediaTaskUiState
 import com.livewallpaper.app.presentation.theme.AppColors
 
 @Composable
@@ -43,7 +45,7 @@ fun HomeScreen(
 ) {
     val stageState by viewModel.stageState.collectAsState()
     val urlInput by viewModel.urlInput.collectAsState()
-    val downloadState by viewModel.downloadState.collectAsState()
+    val mediaTaskState by viewModel.mediaTaskState.collectAsState()
 
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -113,11 +115,13 @@ fun HomeScreen(
                         source = VideoSource.RemoteShared(url)
                     )
                 },
-                isDownloading = downloadState.isDownloading,
-                downloadProgress = downloadState.progress,
-                downloadStatus = downloadState.status,
-                downloadSpeed = downloadState.speed,
-                onCancelDownload = { viewModel.cancelDownload() }
+                isLoading = mediaTaskState is MediaTaskUiState.RemoteDownloading
+            )
+
+            // 全新獨立的媒體任務進度浮動面板（完美區分本地匯入與網路下載）
+            MediaTaskProgressDock(
+                taskState = mediaTaskState,
+                onCancel = { viewModel.cancelTask() }
             )
 
             Spacer(modifier = Modifier.height(16.dp))

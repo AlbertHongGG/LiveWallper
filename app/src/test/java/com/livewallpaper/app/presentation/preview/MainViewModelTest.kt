@@ -252,4 +252,36 @@ class MainViewModelTest {
         assertTrue(effects.any { it is MainUiEffect.NavigateToEditor && it.filePath == sampleFile.absolutePath })
         job.cancel()
     }
+
+    @Test
+    fun `handleVideoSource with LocalUri sets LocalImporting state and emits NavigateToEditor`() = runTest {
+        val permissionManager = FakeWallpaperPermissionManager().apply { hasPermission = true }
+        val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = true }
+        val repository = FakeWallpaperRepository()
+        val storageManager = FakeMediaStorageManager()
+        val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
+        val fakeExtractor = FakeMediaExtractor()
+
+        val viewModel = MainViewModel(
+            wallpaperRepository = repository,
+            wallpaperPermissionManager = permissionManager,
+            wallpaperSystemManager = systemManager,
+            processVideoSourceUseCase = ProcessVideoSourceUseCase(storageManager, fakeExtractor, resolver),
+            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager),
+            resetWallpaperUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager),
+            urlResolver = resolver
+        )
+
+        val effects = mutableListOf<MainUiEffect>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.effect.collect { effects.add(it) }
+        }
+
+        viewModel.handleVideoSource(com.livewallpaper.app.domain.model.VideoSource.LocalUri("content://media/external/video/media/123"))
+        advanceUntilIdle()
+
+        assertTrue(effects.any { it is MainUiEffect.NavigateToEditor })
+        assertTrue(viewModel.mediaTaskState.value is MediaTaskUiState.Idle)
+        job.cancel()
+    }
 }

@@ -17,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,7 +49,22 @@ fun SettingsPage(
                 subtitle = "SYSTEM CONFIGURATION"
             )
 
-            SettingsSection(title = "桌布防護與還原") {
+            // 群組一：桌布體驗與系統整合（聚集所有動態桌布核心互動與系統還原防護）
+            SettingsSection(title = "桌布體驗與系統整合") {
+                SettingsTile(
+                    icon = Icons.Default.TouchApp,
+                    title = "雙擊桌面暫停",
+                    subtitle = "雙擊空白處暫停播放",
+                    trailing = {
+                        AppSwitch(
+                            checked = uiState.doubleTapToPause,
+                            onCheckedChange = { viewModel.toggleDoubleTapToPause(it) }
+                        )
+                    }
+                )
+
+                SettingsDivider()
+
                 SettingsTile(
                     icon = Icons.Default.Security,
                     title = "原桌布備份防護",
@@ -84,20 +98,7 @@ fun SettingsPage(
                 )
             }
 
-            SettingsSection(title = "動態桌布互動") {
-                SettingsTile(
-                    icon = Icons.Default.TouchApp,
-                    title = "雙擊桌面暫停",
-                    subtitle = "雙擊空白處暫停播放",
-                    trailing = {
-                        AppSwitch(
-                            checked = uiState.doubleTapToPause,
-                            onCheckedChange = { viewModel.toggleDoubleTapToPause(it) }
-                        )
-                    }
-                )
-            }
-
+            // 群組二：核心引擎與關於（聚集影片解析引擎更新與應用程式版本）
             SettingsSection(title = "核心引擎與關於") {
                 SettingsTile(
                     icon = Icons.Default.Upgrade,
@@ -121,7 +122,9 @@ fun SettingsPage(
                     },
                     onTap = { viewModel.updateYtDlpEngine() }
                 )
+
                 SettingsDivider()
+
                 SettingsTile(
                     icon = Icons.Default.Info,
                     title = "應用程式版本",

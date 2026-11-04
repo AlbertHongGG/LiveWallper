@@ -82,7 +82,7 @@ fun EditorTopBar(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (isServiceActive) "套用設定" else "套用並啟用",
+                text = "套用",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
