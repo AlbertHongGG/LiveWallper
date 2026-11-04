@@ -43,6 +43,24 @@ class ExtractorFailureClassifierTest {
     }
 
     @Test
+    fun `classify should map linker and ffmpeg missing errors to ProcessingFailed`() {
+        val linkerError = RuntimeException("CANNOT LINK EXECUTABLE libffmpeg.so: library libavdevice.so.61 not found")
+        val failure1 = ExtractorFailureClassifier.classify(linkerError)
+        assertEquals(ExtractorFailure.ProcessingFailed, failure1)
+
+        val ffmpegError = RuntimeException("ffmpeg is not installed, unable to merge formats")
+        val failure2 = ExtractorFailureClassifier.classify(ffmpegError)
+        assertEquals(ExtractorFailure.ProcessingFailed, failure2)
+    }
+
+    @Test
+    fun `classify should map engine initialization failures to EngineUnavailable`() {
+        val initError = RuntimeException("FFmpeg initialization failed on device")
+        val failure = ExtractorFailureClassifier.classify(initError)
+        assertEquals(ExtractorFailure.EngineUnavailable, failure)
+    }
+
+    @Test
     fun `classify should map unknown errors to Unknown`() {
         val error = RuntimeException("Unexpected disk I/O error")
         val failure = ExtractorFailureClassifier.classify(error)

@@ -7,8 +7,8 @@ import java.io.File
  * 負責預覽暫存、晉升正式桌布、與自動清理舊檔案。
  */
 interface MediaStorageManager {
-    /** 取得或建立預覽暫存檔案 (`staging_preview.mp4`) */
-    fun getStagingVideoFile(): File
+    /** 準備全新的預覽暫存檔案 (`staging_preview.mp4`)，確保暫存目錄內無殘留舊分段檔 */
+    suspend fun prepareStagingFile(): File
 
     /**
      * 從系統 Content URI 安全複製檔案至指定的沙盒目的檔案

@@ -19,7 +19,7 @@ class ProcessVideoSourceUseCase(
     private val urlResolver: SharedUrlResolver
 ) {
     operator fun invoke(source: VideoSource): Flow<DownloadProgress> = flow {
-        val stagingFile = storageManager.getStagingVideoFile()
+        val stagingFile = storageManager.prepareStagingFile()
 
         when (source) {
             is VideoSource.LocalUri -> {

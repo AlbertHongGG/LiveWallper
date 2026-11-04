@@ -15,7 +15,7 @@ import java.io.File
 class ApplyWallpaperUseCaseTest {
 
     private class FakeMediaStorageManager : MediaStorageManager {
-        override fun getStagingVideoFile(): File = File("/tmp/staging.mp4")
+        override suspend fun prepareStagingFile(): File = File("/tmp/staging.mp4")
         override suspend fun importFromContentUri(uriString: String, destinationFile: File): Result<File> = Result.success(destinationFile)
         override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(File("/data/wallpapers/active_123.mp4"))
         override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}

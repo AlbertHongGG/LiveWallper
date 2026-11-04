@@ -38,7 +38,7 @@ class ResilientMediaExtractorTest {
         var updateCallCount = 0
         var updateResult: Result<String> = Result.success("ok")
 
-        override suspend fun ensureInitialized() {}
+        override suspend fun ensureReady() {}
         override suspend fun getEngineVersion(): String = "test"
         override suspend fun updateEngine(): Result<String> {
             updateCallCount++
@@ -103,6 +103,26 @@ class ResilientMediaExtractorTest {
             assertEquals(ExtractorFailure.FormatUnavailable, e.failure)
             assertEquals(1, runner.callCount)
             assertEquals(0, engineManager.updateCallCount)
+        }
+    }
+
+    @Test
+    fun `extractAndDownload should throw ProcessingFailed when output file is not generated`() = runTest {
+        val targetFile = File.createTempFile("test_target", ".mp4")
+        if (targetFile.exists()) targetFile.delete()
+
+        // Runner completes without creating the target file (simulating missing ffmpeg merge)
+        val runner = FakeYtDlpRunner()
+        val engineManager = FakeExtractorEngineManager()
+        val customizer = CompositeRequestCustomizer(emptyList())
+        val extractor = ResilientMediaExtractor(runner, engineManager, customizer)
+
+        try {
+            extractor.extractAndDownload("https://pin.it/abc", targetFile).toList()
+            fail("Expected WallpaperError.DownloadFailed with ProcessingFailed")
+        } catch (e: WallpaperError.DownloadFailed) {
+            assertEquals(ExtractorFailure.ProcessingFailed, e.failure)
+            assertEquals(1, runner.callCount)
         }
     }
 }

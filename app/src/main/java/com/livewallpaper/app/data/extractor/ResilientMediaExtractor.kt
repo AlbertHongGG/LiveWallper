@@ -32,7 +32,7 @@ class ResilientMediaExtractor(
         var currentProcessId: String? = null
 
         try {
-            engineManager.ensureInitialized()
+            engineManager.ensureReady()
             trySend(DownloadProgress.Preparing("正在解析影片來源資訊..."))
 
             targetFile.parentFile?.mkdirs()
@@ -78,7 +78,10 @@ class ResilientMediaExtractor(
                         close()
                         return@callbackFlow
                     } else {
-                        throw WallpaperError.UnsupportedContent("未找到有效的影片串流或下載檔案為空")
+                        throw WallpaperError.DownloadFailed(
+                            reason = "影片轉碼或合併輸出檔案缺失",
+                            failure = ExtractorFailure.ProcessingFailed
+                        )
                     }
                 } catch (e: Exception) {
                     if (e is WallpaperError) {

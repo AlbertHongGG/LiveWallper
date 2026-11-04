@@ -173,7 +173,9 @@ class MainViewModel(
                         is WallpaperError.UnsupportedContent -> "該貼文不包含影片串流"
                         is WallpaperError.DownloadFailed -> when (exception.failure) {
                             ExtractorFailure.EngineOutdated -> "解析引擎需要升級，請稍後重試"
+                            ExtractorFailure.EngineUnavailable -> "解析引擎初始化失敗，請重新啟動 App"
                             ExtractorFailure.FormatUnavailable -> "該貼文影片格式受限或無法取得相容串流"
+                            ExtractorFailure.ProcessingFailed -> "影片轉碼或合併處理失敗，請稍後重試"
                             ExtractorFailure.NetworkUnavailable -> "網路連線異常，請確認網路後重試"
                             ExtractorFailure.ContentUnsupported -> "該貼文不支援或屬於私密內容"
                             is ExtractorFailure.Unknown -> exception.reason

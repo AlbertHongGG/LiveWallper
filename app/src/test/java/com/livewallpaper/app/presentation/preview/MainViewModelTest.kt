@@ -77,7 +77,7 @@ class MainViewModelTest {
     }
 
     private class FakeMediaStorageManager : MediaStorageManager {
-        override fun getStagingVideoFile(): File = File.createTempFile("staging", ".mp4")
+        override suspend fun prepareStagingFile(): File = File.createTempFile("staging", ".mp4")
         override suspend fun importFromContentUri(uriString: String, destinationFile: File): Result<File> = Result.success(destinationFile)
         override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(stagingFile)
         override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}

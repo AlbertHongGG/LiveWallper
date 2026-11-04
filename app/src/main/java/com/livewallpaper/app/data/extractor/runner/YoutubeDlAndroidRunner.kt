@@ -1,5 +1,6 @@
 package com.livewallpaper.app.data.extractor.runner
 
+import android.util.Log
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
@@ -10,12 +11,19 @@ import kotlinx.coroutines.withContext
  */
 class YoutubeDlAndroidRunner : YtDlpRunner {
 
+    companion object {
+        private const val TAG = "YoutubeDlRunner"
+    }
+
     override suspend fun execute(
         request: YoutubeDLRequest,
         processId: String,
         onProgress: (progress: Float, etaInSeconds: Long, line: String?) -> Unit
     ): Unit = withContext(Dispatchers.IO) {
         YoutubeDL.getInstance().execute(request, processId) { progress, etaInSeconds, line ->
+            if (!line.isNullOrBlank() && (line.contains("WARNING") || line.contains("ERROR") || line.contains("ffmpeg", ignoreCase = true))) {
+                Log.w(TAG, "[$processId] $line")
+            }
             onProgress(progress, etaInSeconds, line)
         }
     }

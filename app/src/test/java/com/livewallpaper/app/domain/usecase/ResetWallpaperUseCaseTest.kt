@@ -17,7 +17,7 @@ class ResetWallpaperUseCaseTest {
     private class FakeMediaStorageManager : MediaStorageManager {
         var clearCount = 0
 
-        override fun getStagingVideoFile(): File = File("/tmp/staging.mp4")
+        override suspend fun prepareStagingFile(): File = File("/tmp/staging.mp4")
         override suspend fun importFromContentUri(uriString: String, destinationFile: File): Result<File> = Result.success(destinationFile)
         override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(stagingFile)
         override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}

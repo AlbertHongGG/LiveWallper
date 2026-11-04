@@ -23,8 +23,11 @@ class ScopedMediaStorageManager(
     private val activeWallpapersDir: File
         get() = File(context.filesDir, "wallpapers").apply { if (!exists()) mkdirs() }
 
-    override fun getStagingVideoFile(): File {
-        return File(stagingDir, "staging_preview.mp4")
+    override suspend fun prepareStagingFile(): File = withContext(Dispatchers.IO) {
+        try {
+            stagingDir.listFiles()?.forEach { it.delete() }
+        } catch (_: Exception) {}
+        File(stagingDir, "staging_preview.mp4")
     }
 
     override suspend fun importFromContentUri(uriString: String, destinationFile: File): Result<File> =
