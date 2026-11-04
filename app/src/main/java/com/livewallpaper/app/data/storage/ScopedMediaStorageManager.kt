@@ -78,14 +78,12 @@ class ScopedMediaStorageManager(
                     sourceFile.copyTo(targetVideoFile, overwrite = true)
                 }
 
-                // 若縮圖尚未生成，或為新剪輯時間點，則產生 WebP 縮圖
-                if (!targetThumbnailFile.exists() || targetThumbnailFile.length() == 0L) {
-                    thumbnailGenerator.generateThumbnail(
-                        videoFile = targetVideoFile,
-                        destinationFile = targetThumbnailFile,
-                        frameTimeMs = frameTimeMs
-                    ).getOrThrow()
-                }
+                // 依當前剪輯起點或預設起點生成/刷新 WebP 縮圖
+                thumbnailGenerator.generateThumbnail(
+                    videoFile = targetVideoFile,
+                    destinationFile = targetThumbnailFile,
+                    frameTimeMs = frameTimeMs
+                ).getOrThrow()
 
                 val metadata = VideoMetadataRetriever.retrieve(targetVideoFile)
 

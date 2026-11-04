@@ -3,6 +3,7 @@ package com.livewallpaper.app.presentation.features.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.livewallpaper.app.domain.model.common.MediaFormatters
 import com.livewallpaper.app.domain.repository.ExtractorEngineManager
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
@@ -60,9 +61,9 @@ class SettingsViewModel(
                     ytDlpVersion = version,
                     hasBackupPermission = hasPermission,
                     hasSnapshotBackup = hasSnapshot,
-                    stagingSizeFormatted = formatFileSize(stagingBytes),
+                    stagingSizeFormatted = MediaFormatters.formatFileSize(stagingBytes),
                     stagingFilesCount = stagingCount,
-                    archiveSizeFormatted = formatFileSize(archiveBytes),
+                    archiveSizeFormatted = MediaFormatters.formatFileSize(archiveBytes),
                     archiveFilesCount = archiveCount
                 )
             }
@@ -112,14 +113,6 @@ class SettingsViewModel(
                 refreshStats()
                 NotificationController.showWarning("YT-DLP 核心已是最新或網路連線受限")
             }
-        }
-    }
-
-    private fun formatFileSize(bytes: Long): String {
-        return when {
-            bytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024f * 1024f))
-            bytes >= 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024f)
-            else -> "$bytes B"
         }
     }
 

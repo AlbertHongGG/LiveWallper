@@ -2,10 +2,14 @@ package com.livewallpaper.app.data.repository
 
 import com.livewallpaper.app.data.datastore.WallpaperHistoryDataSource
 import com.livewallpaper.app.domain.model.WallpaperHistoryItem
+import com.livewallpaper.app.domain.model.WallpaperSourceType
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperHistoryRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class WallpaperHistoryRepositoryImpl(
@@ -19,50 +23,68 @@ class WallpaperHistoryRepositoryImpl(
             items.filter { File(it.videoFilePath).exists() }
                 .sortedByDescending { it.lastAppliedAtMillis }
         }
+        .flowOn(Dispatchers.IO)
 
-    override suspend fun getHistoryItems(): List<WallpaperHistoryItem> {
-        return historyDataSource.getHistoryItems()
+    override suspend fun getHistoryItems(): List<WallpaperHistoryItem> = withContext(Dispatchers.IO) {
+        historyDataSource.getHistoryItems()
             .filter { File(it.videoFilePath).exists() }
             .sortedByDescending { it.lastAppliedAtMillis }
     }
 
     override suspend fun recordHistory(item: WallpaperHistoryItem) {
-        val currentItems = historyDataSource.getHistoryItems().toMutableList()
-        val existingIndex = currentItems.indexOfFirst { it.id == item.id }
+        historyDataSource.updateHistoryItems { currentItems ->
+            val list = currentItems.toMutableList()
+            val existingIndex = list.indexOfFirst { it.id == item.id }
 
-        if (existingIndex >= 0) {
-            val existing = currentItems[existingIndex]
-            val updated = existing.copy(
-                thumbnailFilePath = if (item.thumbnailFilePath.isNotBlank()) item.thumbnailFilePath else existing.thumbnailFilePath,
-                lastAppliedConfig = item.lastAppliedConfig,
-                lastAppliedAtMillis = System.currentTimeMillis()
-            )
-            currentItems.removeAt(existingIndex)
-            currentItems.add(0, updated)
-        } else {
-            currentItems.add(0, item)
+            if (existingIndex >= 0) {
+                val existing = list[existingIndex]
+                // 智慧保留既有的來源屬性：
+                // 若既有項目為 REMOTE_DOWNLOAD 或已有 sourceUrl，而在主畫面或相簿微調再次套用時，絕不覆寫為 LOCAL_GALLERY / null
+                val resolvedSourceType = if (existing.sourceType == WallpaperSourceType.REMOTE_DOWNLOAD) {
+                    WallpaperSourceType.REMOTE_DOWNLOAD
+                } else {
+                    item.sourceType
+                }
+                val resolvedSourceUrl = existing.sourceUrl ?: item.sourceUrl
+
+                val updated = existing.copy(
+                    thumbnailFilePath = if (item.thumbnailFilePath.isNotBlank()) item.thumbnailFilePath else existing.thumbnailFilePath,
+                    sourceType = resolvedSourceType,
+                    sourceUrl = resolvedSourceUrl,
+                    lastAppliedConfig = item.lastAppliedConfig,
+                    lastAppliedAtMillis = System.currentTimeMillis()
+                )
+                list.removeAt(existingIndex)
+                list.add(0, updated)
+            } else {
+                list.add(0, item)
+            }
+            list
         }
-
-        historyDataSource.saveHistoryItems(currentItems)
     }
 
     override suspend fun deleteHistoryItem(id: String) {
-        val currentItems = historyDataSource.getHistoryItems().toMutableList()
-        val targetIndex = currentItems.indexOfFirst { it.id == id }
-        if (targetIndex >= 0) {
-            val target = currentItems.removeAt(targetIndex)
-            historyDataSource.saveHistoryItems(currentItems)
+        var targetToDelete: WallpaperHistoryItem? = null
+        historyDataSource.updateHistoryItems { currentItems ->
+            val list = currentItems.toMutableList()
+            val index = list.indexOfFirst { it.id == id }
+            if (index >= 0) {
+                targetToDelete = list.removeAt(index)
+            }
+            list
+        }
+        targetToDelete?.let { target ->
             storageManager.deleteArchivedMedia(target.videoFilePath, target.thumbnailFilePath)
         }
     }
 
     override suspend fun clearAllHistory(keepVideoPath: String?) {
-        val currentItems = historyDataSource.getHistoryItems()
-        if (keepVideoPath != null) {
-            val kept = currentItems.filter { it.videoFilePath == keepVideoPath }
-            historyDataSource.saveHistoryItems(kept)
-        } else {
-            historyDataSource.saveHistoryItems(emptyList())
+        historyDataSource.updateHistoryItems { currentItems ->
+            if (keepVideoPath != null) {
+                currentItems.filter { it.videoFilePath == keepVideoPath }
+            } else {
+                emptyList()
+            }
         }
         storageManager.clearAllArchivedMedia(keepVideoPath)
     }

@@ -147,7 +147,7 @@ class MainViewModelTest {
 
         // 嘗試套用桌布
         val tempVideo = File.createTempFile("sample", ".mp4")
-        viewModel.applyWallpaper(WallpaperConfig(videoFilePath = tempVideo.absolutePath)) {}
+        viewModel.applyWallpaper(WallpaperConfig(videoFilePath = tempVideo.absolutePath))
 
         assertTrue("Should prompt for permission when neither permission nor snapshot exists", viewModel.showPermissionPrompt.value)
     }
@@ -205,7 +205,7 @@ class MainViewModelTest {
         )
 
         val tempVideo = File.createTempFile("sample", ".mp4")
-        viewModel.applyWallpaper(WallpaperConfig(videoFilePath = tempVideo.absolutePath)) {}
+        viewModel.applyWallpaper(WallpaperConfig(videoFilePath = tempVideo.absolutePath))
         assertTrue(viewModel.showPermissionPrompt.value)
 
         viewModel.dismissPermissionPrompt(proceedWithoutBackup = true)

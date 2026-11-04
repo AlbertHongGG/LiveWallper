@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.livewallpaper.app.domain.model.WallpaperHistoryItem
-import com.livewallpaper.app.domain.repository.MediaStorageManager
+import com.livewallpaper.app.domain.model.common.MediaFormatters
 import com.livewallpaper.app.domain.repository.WallpaperHistoryRepository
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.usecase.ClearWallpaperHistoryUseCase
@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 data class HistoryItemUiModel(
     val item: WallpaperHistoryItem,
@@ -32,7 +31,6 @@ data class HistoryUiState(
 class HistoryViewModel(
     private val historyRepository: WallpaperHistoryRepository,
     private val wallpaperRepository: WallpaperRepository,
-    private val mediaStorageManager: MediaStorageManager,
     private val deleteHistoryItemUseCase: DeleteHistoryItemUseCase,
     private val clearWallpaperHistoryUseCase: ClearWallpaperHistoryUseCase
 ) : ViewModel() {
@@ -51,7 +49,7 @@ class HistoryViewModel(
         HistoryUiState(
             isLoading = false,
             items = models,
-            totalSizeFormatted = formatFileSize(totalBytes),
+            totalSizeFormatted = MediaFormatters.formatFileSize(totalBytes),
             totalCount = historyList.size
         )
     }.stateIn(
@@ -84,20 +82,9 @@ class HistoryViewModel(
         }
     }
 
-    companion object {
-        fun formatFileSize(bytes: Long): String {
-            return when {
-                bytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024f * 1024f))
-                bytes >= 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024f)
-                else -> "$bytes B"
-            }
-        }
-    }
-
     class Factory(
         private val historyRepository: WallpaperHistoryRepository,
         private val wallpaperRepository: WallpaperRepository,
-        private val mediaStorageManager: MediaStorageManager,
         private val deleteHistoryItemUseCase: DeleteHistoryItemUseCase,
         private val clearWallpaperHistoryUseCase: ClearWallpaperHistoryUseCase
     ) : ViewModelProvider.Factory {
@@ -106,7 +93,6 @@ class HistoryViewModel(
             return HistoryViewModel(
                 historyRepository,
                 wallpaperRepository,
-                mediaStorageManager,
                 deleteHistoryItemUseCase,
                 clearWallpaperHistoryUseCase
             ) as T

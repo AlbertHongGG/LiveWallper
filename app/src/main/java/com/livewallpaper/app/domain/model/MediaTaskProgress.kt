@@ -35,6 +35,10 @@ sealed interface MediaTaskProgress {
         ) : RemoteDownload
     }
 
-    /** 處理完成，輸出預覽/暫存之本地檔案 */
-    data class Completed(val outputFile: File) : MediaTaskProgress
+    /** 處理完成，輸出預覽/暫存之本地檔案，並攜帶確切的來源型態與正規化網址 */
+    data class Completed(
+        val outputFile: File,
+        val sourceType: WallpaperSourceType,
+        val resolvedUrl: String? = null
+    ) : MediaTaskProgress
 }

@@ -117,7 +117,6 @@ class MainViewModel(
     private var pendingApplyConfig: WallpaperConfig? = null
     private var pendingApplySourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY
     private var pendingApplySourceUrl: String? = null
-    private var pendingOnFinished: (() -> Unit)? = null
 
     init {
         checkAndCaptureSnapshot()
@@ -243,20 +242,14 @@ class MainViewModel(
 
                         is MediaTaskProgress.Completed -> {
                             _mediaTaskState.value = MediaTaskUiState.Idle
-                            val sourceUrl = if (source is VideoSource.RemoteShared) _urlInput.value.ifBlank { null } else null
                             _urlInput.value = ""
-                            val sourceType = if (source is VideoSource.LocalUri) {
-                                WallpaperSourceType.LOCAL_GALLERY
-                            } else {
-                                WallpaperSourceType.REMOTE_DOWNLOAD
-                            }
-                            val successMsg = if (source is VideoSource.LocalUri) "本地影片匯入成功" else "影片解析載入成功"
+                            val successMsg = if (progress.sourceType == WallpaperSourceType.LOCAL_GALLERY) "本地影片匯入成功" else "影片解析載入成功"
                             NotificationController.showSuccess(successMsg)
                             _effect.send(
                                 MainUiEffect.NavigateToEditor(
                                     filePath = progress.outputFile.absolutePath,
-                                    sourceType = sourceType,
-                                    sourceUrl = sourceUrl
+                                    sourceType = progress.sourceType,
+                                    sourceUrl = progress.resolvedUrl
                                 )
                             )
                         }
@@ -290,13 +283,11 @@ class MainViewModel(
                     }
                     // 若有暫存的套用請求，自動繼續執行套用流程
                     pendingApplyConfig?.let { pendingConfig ->
-                        val onFinished = pendingOnFinished ?: {}
                         val sourceType = pendingApplySourceType
                         val sourceUrl = pendingApplySourceUrl
                         pendingApplyConfig = null
-                        pendingOnFinished = null
                         pendingApplySourceUrl = null
-                        executeApplyWallpaper(pendingConfig, sourceType, sourceUrl, onFinished)
+                        executeApplyWallpaper(pendingConfig, sourceType, sourceUrl)
                     }
                 }
             }
@@ -310,17 +301,14 @@ class MainViewModel(
         if (proceedWithoutBackup) {
             NotificationController.showInfo("未開啟備份，清空桌布時將回退至原廠預設桌布")
             pendingApplyConfig?.let { pendingConfig ->
-                val onFinished = pendingOnFinished ?: {}
                 val sourceType = pendingApplySourceType
                 val sourceUrl = pendingApplySourceUrl
                 pendingApplyConfig = null
-                pendingOnFinished = null
                 pendingApplySourceUrl = null
-                executeApplyWallpaper(pendingConfig, sourceType, sourceUrl, onFinished)
+                executeApplyWallpaper(pendingConfig, sourceType, sourceUrl)
             }
         } else {
             pendingApplyConfig = null
-            pendingOnFinished = null
             pendingApplySourceUrl = null
         }
     }
@@ -328,8 +316,7 @@ class MainViewModel(
     fun applyWallpaper(
         config: WallpaperConfig,
         sourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY,
-        sourceUrl: String? = null,
-        onFinished: () -> Unit
+        sourceUrl: String? = null
     ) {
         // 若尚未備份且未獲授權且非已由服務託管，則彈出引導
         if (!wallpaperSystemManager.hasSnapshot() &&
@@ -339,7 +326,6 @@ class MainViewModel(
             pendingApplyConfig = config
             pendingApplySourceType = sourceType
             pendingApplySourceUrl = sourceUrl
-            pendingOnFinished = onFinished
             _showPermissionPrompt.value = true
             return
         }
@@ -351,14 +337,13 @@ class MainViewModel(
             }
         }
 
-        executeApplyWallpaper(config, sourceType, sourceUrl, onFinished)
+        executeApplyWallpaper(config, sourceType, sourceUrl)
     }
 
     private fun executeApplyWallpaper(
         config: WallpaperConfig,
         sourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY,
-        sourceUrl: String? = null,
-        onFinished: () -> Unit
+        sourceUrl: String? = null
     ) {
         viewModelScope.launch {
             val stagingFile = File(config.videoFilePath)
@@ -376,7 +361,6 @@ class MainViewModel(
                 if (isServiceActive) {
                     NotificationController.showSuccess("桌布設定已即時生效")
                     _effect.send(MainUiEffect.ApplyWallpaperSuccess)
-                    onFinished()
                 } else {
                     _effect.send(MainUiEffect.RequestSetWallpaperIntent)
                 }

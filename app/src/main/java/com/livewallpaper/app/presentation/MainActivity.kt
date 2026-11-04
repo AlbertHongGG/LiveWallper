@@ -71,7 +71,6 @@ class MainActivity : ComponentActivity() {
         HistoryViewModel.Factory(
             historyRepository = app.container.wallpaperHistoryRepository,
             wallpaperRepository = app.container.wallpaperRepository,
-            mediaStorageManager = app.container.mediaStorageManager,
             deleteHistoryItemUseCase = app.container.deleteHistoryItemUseCase,
             clearWallpaperHistoryUseCase = app.container.clearWallpaperHistoryUseCase
         )
@@ -109,7 +108,8 @@ class MainActivity : ComponentActivity() {
                                 launchSetWallpaperIntent()
                             }
                             is MainUiEffect.ApplyWallpaperSuccess -> {
-                                if (backStack.lastOrNull() is AppRoute.Editor) {
+                                // 安全將返回棧收斂回根畫面 (HomeScreen)，清空之上的 Editor 或 History 畫廊
+                                while (backStack.size > 1) {
                                     backStack.removeAt(backStack.size - 1)
                                 }
                             }
@@ -212,9 +212,7 @@ class MainActivity : ComponentActivity() {
                                                 config = updatedConfig,
                                                 sourceType = route.sourceType,
                                                 sourceUrl = route.sourceUrl
-                                            ) {
-                                                navigator.pop()
-                                            }
+                                            )
                                         }
                                     )
                                 }

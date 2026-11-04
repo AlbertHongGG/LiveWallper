@@ -4,6 +4,7 @@ import com.livewallpaper.app.domain.model.DownloadProgress
 import com.livewallpaper.app.domain.model.MediaTaskProgress
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperError
+import com.livewallpaper.app.domain.model.WallpaperSourceType
 import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.MediaExtractor
 import com.livewallpaper.app.domain.repository.MediaStorageManager
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.flow
 
 /**
  * 處理影片來源並落入預覽暫存區 (Staging) 的 UseCase。
- * 統一抽象處理「本地媒體複製」與「遠端 Pinterest 解析下載」，輸出語意清晰之 [MediaTaskProgress]。
+ * 統一抽象處理「本地媒體複製」與「遠端 Pinterest 解析下載」，輸出語意清晰且富含來源元數據之 [MediaTaskProgress]。
  */
 class ProcessVideoSourceUseCase(
     private val storageManager: MediaStorageManager,
@@ -28,7 +29,13 @@ class ProcessVideoSourceUseCase(
                 val result = storageManager.importFromContentUri(source.uriString, stagingFile)
                 result.onSuccess { file ->
                     emit(MediaTaskProgress.LocalImport.Analyzing("正在驗證影片格式..."))
-                    emit(MediaTaskProgress.Completed(file))
+                    emit(
+                        MediaTaskProgress.Completed(
+                            outputFile = file,
+                            sourceType = WallpaperSourceType.LOCAL_GALLERY,
+                            resolvedUrl = null
+                        )
+                    )
                 }.onFailure { throwable ->
                     throw throwable as? WallpaperError
                         ?: WallpaperError.StorageError("無法匯入本地檔案", throwable)
@@ -59,7 +66,13 @@ class ProcessVideoSourceUseCase(
                             )
                         }
                         is DownloadProgress.Completed -> {
-                            emit(MediaTaskProgress.Completed(downloadProgress.outputFile))
+                            emit(
+                                MediaTaskProgress.Completed(
+                                    outputFile = downloadProgress.outputFile,
+                                    sourceType = WallpaperSourceType.REMOTE_DOWNLOAD,
+                                    resolvedUrl = cleanUrl
+                                )
+                            )
                         }
                     }
                 }

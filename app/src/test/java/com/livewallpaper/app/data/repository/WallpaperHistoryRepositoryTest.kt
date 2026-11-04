@@ -1,6 +1,5 @@
 package com.livewallpaper.app.data.repository
 
-import com.livewallpaper.app.data.datastore.WallpaperHistoryDataSource
 import com.livewallpaper.app.domain.model.ArchivedMediaAsset
 import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.WallpaperConfig
@@ -58,6 +57,10 @@ class WallpaperHistoryRepositoryTest {
         suspend fun saveHistoryItems(newItems: List<WallpaperHistoryItem>) {
             items = newItems.toMutableList()
         }
+
+        suspend fun updateHistoryItems(transform: (List<WallpaperHistoryItem>) -> List<WallpaperHistoryItem>) {
+            items = transform(items.toList()).toMutableList()
+        }
     }
 
     private class TestableWallpaperHistoryRepository(
@@ -76,42 +79,57 @@ class WallpaperHistoryRepositoryTest {
         }
 
         override suspend fun recordHistory(item: WallpaperHistoryItem) {
-            val currentItems = fakeDataSource.getHistoryItems().toMutableList()
-            val existingIndex = currentItems.indexOfFirst { it.id == item.id }
+            fakeDataSource.updateHistoryItems { currentItems ->
+                val list = currentItems.toMutableList()
+                val existingIndex = list.indexOfFirst { it.id == item.id }
 
-            if (existingIndex >= 0) {
-                val existing = currentItems[existingIndex]
-                val updated = existing.copy(
-                    thumbnailFilePath = if (item.thumbnailFilePath.isNotBlank()) item.thumbnailFilePath else existing.thumbnailFilePath,
-                    lastAppliedConfig = item.lastAppliedConfig,
-                    lastAppliedAtMillis = System.currentTimeMillis()
-                )
-                currentItems.removeAt(existingIndex)
-                currentItems.add(0, updated)
-            } else {
-                currentItems.add(0, item)
+                if (existingIndex >= 0) {
+                    val existing = list[existingIndex]
+                    val resolvedSourceType = if (existing.sourceType == WallpaperSourceType.REMOTE_DOWNLOAD) {
+                        WallpaperSourceType.REMOTE_DOWNLOAD
+                    } else {
+                        item.sourceType
+                    }
+                    val resolvedSourceUrl = existing.sourceUrl ?: item.sourceUrl
+
+                    val updated = existing.copy(
+                        thumbnailFilePath = if (item.thumbnailFilePath.isNotBlank()) item.thumbnailFilePath else existing.thumbnailFilePath,
+                        sourceType = resolvedSourceType,
+                        sourceUrl = resolvedSourceUrl,
+                        lastAppliedConfig = item.lastAppliedConfig,
+                        lastAppliedAtMillis = System.currentTimeMillis()
+                    )
+                    list.removeAt(existingIndex)
+                    list.add(0, updated)
+                } else {
+                    list.add(0, item)
+                }
+                list
             }
-
-            fakeDataSource.saveHistoryItems(currentItems)
         }
 
         override suspend fun deleteHistoryItem(id: String) {
-            val currentItems = fakeDataSource.getHistoryItems().toMutableList()
-            val targetIndex = currentItems.indexOfFirst { it.id == id }
-            if (targetIndex >= 0) {
-                val target = currentItems.removeAt(targetIndex)
-                fakeDataSource.saveHistoryItems(currentItems)
+            var targetToDelete: WallpaperHistoryItem? = null
+            fakeDataSource.updateHistoryItems { currentItems ->
+                val list = currentItems.toMutableList()
+                val targetIndex = list.indexOfFirst { it.id == id }
+                if (targetIndex >= 0) {
+                    targetToDelete = list.removeAt(targetIndex)
+                }
+                list
+            }
+            targetToDelete?.let { target ->
                 storageManager.deleteArchivedMedia(target.videoFilePath, target.thumbnailFilePath)
             }
         }
 
         override suspend fun clearAllHistory(keepVideoPath: String?) {
-            val currentItems = fakeDataSource.getHistoryItems()
-            if (keepVideoPath != null) {
-                val kept = currentItems.filter { it.videoFilePath == keepVideoPath }
-                fakeDataSource.saveHistoryItems(kept)
-            } else {
-                fakeDataSource.saveHistoryItems(emptyList())
+            fakeDataSource.updateHistoryItems { currentItems ->
+                if (keepVideoPath != null) {
+                    currentItems.filter { it.videoFilePath == keepVideoPath }
+                } else {
+                    emptyList()
+                }
             }
             storageManager.clearAllArchivedMedia(keepVideoPath)
         }
@@ -170,6 +188,37 @@ class WallpaperHistoryRepositoryTest {
         assertEquals("hash1", items.first().id)
         assertEquals(0.8f, items.first().lastAppliedConfig.volume, 0.001f)
         assertTrue(items.first().lastAppliedAtMillis > 1000L)
+    }
+
+    @Test
+    fun `recordHistory preserves original REMOTE_DOWNLOAD and sourceUrl when re-applying as LOCAL_GALLERY`() = runTest {
+        val testFile = tempFolder.newFile("video_downloaded.mp4")
+        val remoteItem = WallpaperHistoryItem(
+            id = "pin_hash",
+            videoFilePath = testFile.absolutePath,
+            thumbnailFilePath = "/thumb_pin.webp",
+            sourceType = WallpaperSourceType.REMOTE_DOWNLOAD,
+            sourceUrl = "https://pinterest.com/pin/12345"
+        )
+        repository.recordHistory(remoteItem)
+
+        // 使用者在主畫面點擊預覽舞台編輯並重新套用，傳入預設的 LOCAL_GALLERY 且 sourceUrl 為 null
+        val reAppliedItem = WallpaperHistoryItem(
+            id = "pin_hash",
+            videoFilePath = testFile.absolutePath,
+            thumbnailFilePath = "/thumb_pin.webp",
+            sourceType = WallpaperSourceType.LOCAL_GALLERY,
+            sourceUrl = null,
+            lastAppliedConfig = WallpaperConfig(volume = 0.9f)
+        )
+        repository.recordHistory(reAppliedItem)
+
+        val items = repository.getHistoryItems()
+        assertEquals(1, items.size)
+        val resultItem = items.first()
+        assertEquals(WallpaperSourceType.REMOTE_DOWNLOAD, resultItem.sourceType)
+        assertEquals("https://pinterest.com/pin/12345", resultItem.sourceUrl)
+        assertEquals(0.9f, resultItem.lastAppliedConfig.volume, 0.001f)
     }
 
     @Test

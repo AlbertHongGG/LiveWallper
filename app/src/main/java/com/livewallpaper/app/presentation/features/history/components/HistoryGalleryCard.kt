@@ -71,10 +71,12 @@ fun HistoryGalleryCard(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // 縮圖 (高效 WebP 靜態圖載入)
+            // 縮圖 (高效 WebP 靜態圖載入，綁定套用時間戳確保剪輯刷新時快取即時更新)
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(File(item.thumbnailFilePath))
+                    .memoryCacheKey("${item.id}_${item.lastAppliedAtMillis}")
+                    .diskCacheKey("${item.id}_${item.lastAppliedAtMillis}")
                     .crossfade(true)
                     .build(),
                 contentDescription = null,

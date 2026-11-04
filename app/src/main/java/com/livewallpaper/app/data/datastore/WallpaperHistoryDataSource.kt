@@ -62,4 +62,25 @@ class WallpaperHistoryDataSource(
             prefs[KEY_HISTORY_JSON] = jsonString
         }
     }
+
+    /**
+     * 原子交易式更新歷史清單。
+     * 在 DataStore 內部鎖區塊中完成讀取、反序列化、套用轉換與序列化回寫，徹底避免 Race Condition。
+     */
+    suspend fun updateHistoryItems(transform: (List<WallpaperHistoryItem>) -> List<WallpaperHistoryItem>) {
+        context.wallpaperHistoryDataStore.edit { prefs ->
+            val jsonString = prefs[KEY_HISTORY_JSON].orEmpty()
+            val currentList = if (jsonString.isBlank()) {
+                emptyList()
+            } else {
+                try {
+                    json.decodeFromString<List<WallpaperHistoryItem>>(jsonString)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+            val updated = transform(currentList)
+            prefs[KEY_HISTORY_JSON] = json.encodeToString(updated)
+        }
+    }
 }
