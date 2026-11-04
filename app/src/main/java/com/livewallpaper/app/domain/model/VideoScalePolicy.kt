@@ -11,6 +11,15 @@ data class ScaleLayoutResult(
 )
 
 /**
+ * OpenGL 規範化裝置座標 (NDC, Normalized Device Coordinates) 縮放係數。
+ * 用於頂點著色器中對以 [-1.0, 1.0] 為邊界的四邊形進行精準非等比縮放與中心裁切。
+ */
+data class NdcScaleResult(
+    val scaleX: Float,
+    val scaleY: Float
+)
+
+/**
  * 純數學幾何縮放策略計算器（Pure Geometry Scale Engine）。
  *
  * 核心設計：
@@ -74,5 +83,26 @@ object VideoScalePolicy {
             offsetX = offsetX,
             offsetY = offsetY
         )
+    }
+
+    /**
+     * 計算在 OpenGL NDC 空間 [-1.0, 1.0] 下 Quad 頂點之縮放倍率。
+     * 100% 與 [calculate] 數學公式同源，保證 Compose 預覽與 OpenGL 桌布呈現絕對一致。
+     */
+    fun calculateNdcScale(
+        containerWidth: Int,
+        containerHeight: Int,
+        videoWidth: Int,
+        videoHeight: Int,
+        scalingMode: ScalingMode
+    ): NdcScaleResult {
+        if (containerWidth <= 0 || containerHeight <= 0 || videoWidth <= 0 || videoHeight <= 0) {
+            return NdcScaleResult(1.0f, 1.0f)
+        }
+
+        val layout = calculate(containerWidth, containerHeight, videoWidth, videoHeight, scalingMode)
+        val scaleX = layout.targetWidth.toFloat() / containerWidth.toFloat()
+        val scaleY = layout.targetHeight.toFloat() / containerHeight.toFloat()
+        return NdcScaleResult(scaleX = scaleX, scaleY = scaleY)
     }
 }

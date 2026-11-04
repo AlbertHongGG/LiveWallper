@@ -50,6 +50,11 @@ class VideoWallpaperService : WallpaperService() {
             playerController.onSurfaceCreated(holder)
         }
 
+        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+            super.onSurfaceChanged(holder, format, width, height)
+            playerController.onSurfaceChanged(width, height)
+        }
+
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             playerController.onVisibilityChanged(visible)
