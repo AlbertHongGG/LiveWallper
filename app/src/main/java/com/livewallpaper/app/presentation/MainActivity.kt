@@ -9,15 +9,24 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.livewallpaper.app.LiveWallpaperApplication
+import com.livewallpaper.app.R
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.model.WallpaperSourceType
@@ -28,6 +37,7 @@ import com.livewallpaper.app.presentation.features.history.HistoryViewModel
 import com.livewallpaper.app.presentation.features.home.HomeScreen
 import com.livewallpaper.app.presentation.features.settings.SettingsPage
 import com.livewallpaper.app.presentation.features.settings.SettingsViewModel
+import com.livewallpaper.app.presentation.features.splash.SplashScreen
 import com.livewallpaper.app.presentation.navigation.components.CupertinoSwipeBackContainer
 import com.livewallpaper.app.presentation.navigation.contract.LocalCupertinoNavigator
 import com.livewallpaper.app.presentation.navigation.model.AppRoute
@@ -89,6 +99,7 @@ class MainActivity : ComponentActivity() {
 
     @androidx.compose.material3.ExperimentalMaterial3Api
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_LiveWallpaper)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -100,6 +111,7 @@ class MainActivity : ComponentActivity() {
             LiveWallpaperTheme {
                 val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Main) }
                 val showPermissionPrompt by mainViewModel.showPermissionPrompt.collectAsState()
+                var showSplash by rememberSaveable { mutableStateOf(true) }
 
                 LaunchedEffect(Unit) {
                     mainViewModel.effect.collect { effect ->
@@ -142,92 +154,107 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
-                GlobalNotificationOverlay {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = AppColors.backgroundLight
-                    ) {
-                        CupertinoSwipeBackContainer(
-                            backStack = backStack,
-                            onPushRoute = { backStack.add(it) },
-                            onPopRoute = { if (backStack.size > 1) backStack.removeAt(backStack.size - 1) }
-                        ) { route ->
-                            val navigator = LocalCupertinoNavigator.current
+                AnimatedContent(
+                    targetState = showSplash,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(400)) togetherWith
+                            fadeOut(animationSpec = tween(400))
+                    },
+                    label = "splashTransition"
+                ) { isSplash ->
+                    if (isSplash) {
+                        SplashScreen(
+                            onAnimationFinished = { showSplash = false }
+                        )
+                    } else {
+                        GlobalNotificationOverlay {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = AppColors.backgroundLight
+                            ) {
+                                CupertinoSwipeBackContainer(
+                                    backStack = backStack,
+                                    onPushRoute = { backStack.add(it) },
+                                    onPopRoute = { if (backStack.size > 1) backStack.removeAt(backStack.size - 1) }
+                                ) { route ->
+                                    val navigator = LocalCupertinoNavigator.current
 
-                            when (route) {
-                                is AppRoute.Main -> {
-                                    HomeScreen(
-                                        viewModel = mainViewModel,
-                                        onNavigateToHistory = {
-                                            navigator.push(AppRoute.History)
-                                        },
-                                        onNavigateToSettings = {
-                                            navigator.push(AppRoute.Settings)
-                                        },
-                                        onOpenEditor = { path ->
-                                            val currentConfig = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.config
-                                                ?: mainViewModel.getCurrentConfig()
-                                            navigator.push(
-                                                AppRoute.Editor(
-                                                    videoPath = path,
-                                                    presetConfig = currentConfig
-                                                )
+                                    when (route) {
+                                        is AppRoute.Main -> {
+                                            HomeScreen(
+                                                viewModel = mainViewModel,
+                                                onNavigateToHistory = {
+                                                    navigator.push(AppRoute.History)
+                                                },
+                                                onNavigateToSettings = {
+                                                    navigator.push(AppRoute.Settings)
+                                                },
+                                                onOpenEditor = { path ->
+                                                    val currentConfig = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.config
+                                                        ?: mainViewModel.getCurrentConfig()
+                                                    navigator.push(
+                                                        AppRoute.Editor(
+                                                            videoPath = path,
+                                                            presetConfig = currentConfig
+                                                        )
+                                                    )
+                                                }
                                             )
                                         }
-                                    )
-                                }
 
-                                is AppRoute.History -> {
-                                    HistoryGalleryScreen(
-                                        viewModel = historyViewModel,
-                                        onSelectHistoryItem = { path, type, url, config ->
-                                            navigator.push(
-                                                AppRoute.Editor(
-                                                    videoPath = path,
-                                                    sourceType = type,
-                                                    sourceUrl = url,
-                                                    presetConfig = config
-                                                )
+                                        is AppRoute.History -> {
+                                            HistoryGalleryScreen(
+                                                viewModel = historyViewModel,
+                                                onSelectHistoryItem = { path, type, url, config ->
+                                                    navigator.push(
+                                                        AppRoute.Editor(
+                                                            videoPath = path,
+                                                            sourceType = type,
+                                                            sourceUrl = url,
+                                                            presetConfig = config
+                                                        )
+                                                    )
+                                                }
                                             )
                                         }
-                                    )
-                                }
 
-                                is AppRoute.Editor -> {
-                                    val initialConfig = route.presetConfig
-                                        ?: WallpaperConfig(videoFilePath = route.videoPath)
-                                    val isRunning = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.let { active ->
-                                        active.isServiceActive && active.config.videoFilePath == route.videoPath
-                                    } ?: false
+                                        is AppRoute.Editor -> {
+                                            val initialConfig = route.presetConfig
+                                                ?: WallpaperConfig(videoFilePath = route.videoPath)
+                                            val isRunning = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.let { active ->
+                                                active.isServiceActive && active.config.videoFilePath == route.videoPath
+                                            } ?: false
 
-                                    WallpaperEditorScreen(
-                                        videoPath = route.videoPath,
-                                        initialConfig = initialConfig,
-                                        isServiceActive = isRunning,
-                                        onDiscard = {
-                                            navigator.pop()
-                                        },
-                                        onApply = { updatedConfig ->
-                                            mainViewModel.applyWallpaper(
-                                                config = updatedConfig,
-                                                sourceType = route.sourceType,
-                                                sourceUrl = route.sourceUrl
+                                            WallpaperEditorScreen(
+                                                videoPath = route.videoPath,
+                                                initialConfig = initialConfig,
+                                                isServiceActive = isRunning,
+                                                onDiscard = {
+                                                    navigator.pop()
+                                                },
+                                                onApply = { updatedConfig ->
+                                                    mainViewModel.applyWallpaper(
+                                                        config = updatedConfig,
+                                                        sourceType = route.sourceType,
+                                                        sourceUrl = route.sourceUrl
+                                                    )
+                                                }
                                             )
                                         }
-                                    )
-                                }
 
-                                is AppRoute.Settings -> {
-                                    SettingsPage(
-                                        viewModel = settingsViewModel,
-                                        onRequestPermission = {
-                                            try {
-                                                startActivity(mainViewModel.requestPermissionIntent())
-                                            } catch (_: Exception) {
-                                                NotificationController.showError("無法開啟權限設定頁面")
-                                            }
+                                        is AppRoute.Settings -> {
+                                            SettingsPage(
+                                                viewModel = settingsViewModel,
+                                                onRequestPermission = {
+                                                    try {
+                                                        startActivity(mainViewModel.requestPermissionIntent())
+                                                    } catch (_: Exception) {
+                                                        NotificationController.showError("無法開啟權限設定頁面")
+                                                    }
+                                                }
+                                            )
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }

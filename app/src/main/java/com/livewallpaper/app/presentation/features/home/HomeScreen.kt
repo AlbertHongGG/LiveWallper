@@ -76,7 +76,7 @@ fun HomeScreen(
             ) {
                 Column {
                     Text(
-                        text = "LiveWallpaper",
+                        text = "Live Wallpaper",
                         fontSize = 30.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = AppColors.textPrimaryLight,
