@@ -40,20 +40,29 @@ class ResetWallpaperUseCaseTest {
     }
 
     private class FakeWallpaperSystemManager : WallpaperSystemManager {
-        var resetCount = 0
-        var isActive = true
+        var restoreCount = 0
+        var snapshotCaptured = false
+        var hasSnapshotCached = true
 
-        override suspend fun resetToSystemDefault(): Result<Unit> {
-            resetCount++
-            isActive = false
+        override fun isWallpaperServiceActive(): Boolean = false
+
+        override suspend fun captureCurrentWallpaperSnapshot(): Result<Boolean> {
+            snapshotCaptured = true
+            hasSnapshotCached = true
+            return Result.success(true)
+        }
+
+        override suspend fun restoreOriginalWallpaper(): Result<Unit> {
+            restoreCount++
+            hasSnapshotCached = false
             return Result.success(Unit)
         }
 
-        override fun isWallpaperServiceActive(): Boolean = isActive
+        override fun hasSnapshot(): Boolean = hasSnapshotCached
     }
 
     @Test
-    fun `invoke should clear active files, reset videoFilePath and reset system wallpaper to default`() = runTest {
+    fun `invoke should clear active files, reset videoFilePath and restore original wallpaper`() = runTest {
         val storageManager = FakeMediaStorageManager()
         val repository = FakeWallpaperRepository()
         val systemManager = FakeWallpaperSystemManager()
@@ -64,7 +73,7 @@ class ResetWallpaperUseCaseTest {
         assertTrue(result.isSuccess)
         assertEquals(1, storageManager.clearCount)
         assertEquals("", repository.current.videoFilePath)
-        assertEquals(1, systemManager.resetCount)
-        assertEquals(false, systemManager.isWallpaperServiceActive())
+        assertEquals(1, systemManager.restoreCount)
+        assertEquals(false, systemManager.hasSnapshot())
     }
 }

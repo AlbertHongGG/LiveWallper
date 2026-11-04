@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +25,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.livewallpaper.app.LiveWallpaperApplication
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
+import com.livewallpaper.app.presentation.components.WallpaperPermissionBottomSheet
 import com.livewallpaper.app.presentation.features.editor.WallpaperEditorScreen
 import com.livewallpaper.app.presentation.features.home.HomeScreen
 import com.livewallpaper.app.presentation.features.settings.SettingsPage
@@ -45,6 +48,7 @@ class MainActivity : ComponentActivity() {
         val app = application as LiveWallpaperApplication
         MainViewModel.Factory(
             wallpaperRepository = app.container.wallpaperRepository,
+            wallpaperPermissionManager = app.container.wallpaperPermissionManager,
             wallpaperSystemManager = app.container.wallpaperSystemManager,
             processVideoSourceUseCase = app.container.processVideoSourceUseCase,
             applyWallpaperUseCase = app.container.applyWallpaperUseCase,
@@ -56,7 +60,9 @@ class MainActivity : ComponentActivity() {
         val app = application as LiveWallpaperApplication
         SettingsViewModel.Factory(
             wallpaperRepository = app.container.wallpaperRepository,
-            mediaExtractor = app.container.mediaExtractor
+            mediaExtractor = app.container.mediaExtractor,
+            wallpaperPermissionManager = app.container.wallpaperPermissionManager,
+            wallpaperSystemManager = app.container.wallpaperSystemManager
         )
     }
 
@@ -67,6 +73,7 @@ class MainActivity : ComponentActivity() {
         mainViewModel.refreshServiceStatus()
         if (mainViewModel.isWallpaperServiceRunning()) {
             NotificationController.showSuccess("動態桌布已成功套用至系統桌面！")
+            mainViewModel.notifyApplySuccess()
         }
     }
 
@@ -75,26 +82,45 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                mainViewModel.effect.collect { effect ->
-                    when (effect) {
-                        is MainUiEffect.RequestSetWallpaperIntent -> {
-                            launchSetWallpaperIntent()
-                        }
-                        is MainUiEffect.NavigateToEditor -> {
-                            // 供全域跳轉使用
-                        }
-                    }
-                }
-            }
-        }
-
         handleIncomingIntent(intent)
 
         setContent {
             LiveWallpaperTheme {
                 val backStack = remember { mutableStateListOf<AppRoute>(AppRoute.Main) }
+                val showPermissionPrompt by mainViewModel.showPermissionPrompt.collectAsState()
+
+                LaunchedEffect(Unit) {
+                    mainViewModel.effect.collect { effect ->
+                        when (effect) {
+                            is MainUiEffect.RequestSetWallpaperIntent -> {
+                                launchSetWallpaperIntent()
+                            }
+                            is MainUiEffect.ApplyWallpaperSuccess -> {
+                                if (backStack.lastOrNull() is AppRoute.Editor) {
+                                    backStack.removeAt(backStack.size - 1)
+                                }
+                            }
+                            is MainUiEffect.NavigateToEditor -> {
+                                backStack.add(AppRoute.Editor(effect.filePath))
+                            }
+                        }
+                    }
+                }
+
+                if (showPermissionPrompt) {
+                    WallpaperPermissionBottomSheet(
+                        onGrantClick = {
+                            try {
+                                startActivity(mainViewModel.requestPermissionIntent())
+                            } catch (_: Exception) {
+                                NotificationController.showError("無法開啟權限設定頁面")
+                            }
+                        },
+                        onDismiss = {
+                            mainViewModel.dismissPermissionPrompt(proceedWithoutBackup = true)
+                        }
+                    )
+                }
 
                 GlobalNotificationOverlay {
                     Surface(
@@ -138,17 +164,20 @@ class MainActivity : ComponentActivity() {
                                             mainViewModel.applyWallpaper(updatedConfig) {
                                                 navigator.pop()
                                             }
-                                            if (!isRunning) {
-                                                // 若為首次啟用，跳系統對話框後返回時自動 pop
-                                                navigator.pop()
-                                            }
                                         }
                                     )
                                 }
 
                                 is AppRoute.Settings -> {
                                     SettingsPage(
-                                        viewModel = settingsViewModel
+                                        viewModel = settingsViewModel,
+                                        onRequestPermission = {
+                                            try {
+                                                startActivity(mainViewModel.requestPermissionIntent())
+                                            } catch (_: Exception) {
+                                                NotificationController.showError("無法開啟權限設定頁面")
+                                            }
+                                        }
                                     )
                                 }
                             }
@@ -162,6 +191,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         mainViewModel.refreshServiceStatus()
+        mainViewModel.checkAndCaptureSnapshot()
         settingsViewModel.refreshStats()
     }
 

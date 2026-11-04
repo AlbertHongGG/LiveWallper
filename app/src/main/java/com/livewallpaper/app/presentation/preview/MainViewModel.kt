@@ -2,7 +2,7 @@ package com.livewallpaper.app.presentation.preview
 
 import android.app.WallpaperManager
 import android.content.ComponentName
-import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -12,6 +12,7 @@ import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.model.WallpaperError
+import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 import com.livewallpaper.app.domain.usecase.ApplyWallpaperUseCase
@@ -60,11 +61,13 @@ data class DownloadUiState(
 
 sealed interface MainUiEffect {
     data object RequestSetWallpaperIntent : MainUiEffect
+    data object ApplyWallpaperSuccess : MainUiEffect
     data class NavigateToEditor(val filePath: String) : MainUiEffect
 }
 
 class MainViewModel(
     private val wallpaperRepository: WallpaperRepository,
+    private val wallpaperPermissionManager: WallpaperPermissionManager,
     private val wallpaperSystemManager: WallpaperSystemManager,
     private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
     private val applyWallpaperUseCase: ApplyWallpaperUseCase,
@@ -83,13 +86,21 @@ class MainViewModel(
     private val _downloadState = MutableStateFlow(DownloadUiState())
     val downloadState: StateFlow<DownloadUiState> = _downloadState.asStateFlow()
 
+    // 4. 原桌布防護備份引導對話框狀態
+    private val _showPermissionPrompt = MutableStateFlow(false)
+    val showPermissionPrompt: StateFlow<Boolean> = _showPermissionPrompt.asStateFlow()
+
     private val _effect = MutableSharedFlow<MainUiEffect>()
     val effect: SharedFlow<MainUiEffect> = _effect.asSharedFlow()
 
     private var currentConfigSnapshot: WallpaperConfig = WallpaperConfig()
     private var downloadJob: Job? = null
+    private var pendingApplyConfig: WallpaperConfig? = null
+    private var pendingOnFinished: (() -> Unit)? = null
 
     init {
+        checkAndCaptureSnapshot()
+
         wallpaperRepository.wallpaperConfig
             .onEach { config ->
                 currentConfigSnapshot = config
@@ -199,7 +210,69 @@ class MainViewModel(
         NotificationController.showInfo("已取消下載")
     }
 
+    fun checkAndCaptureSnapshot() {
+        viewModelScope.launch {
+            if (!wallpaperSystemManager.isWallpaperServiceActive()) {
+                if (wallpaperPermissionManager.hasBackupPermission()) {
+                    if (!wallpaperSystemManager.hasSnapshot()) {
+                        val result = wallpaperSystemManager.captureCurrentWallpaperSnapshot()
+                        if (result.getOrDefault(false)) {
+                            NotificationController.showSuccess("原桌布已成功安全備份")
+                        }
+                    }
+                    // 若有暫存的套用請求，自動繼續執行套用流程
+                    pendingApplyConfig?.let { pendingConfig ->
+                        val onFinished = pendingOnFinished ?: {}
+                        pendingApplyConfig = null
+                        pendingOnFinished = null
+                        executeApplyWallpaper(pendingConfig, onFinished)
+                    }
+                }
+            }
+        }
+    }
+
+    fun requestPermissionIntent() = wallpaperPermissionManager.createRequestPermissionIntent()
+
+    fun dismissPermissionPrompt(proceedWithoutBackup: Boolean = false) {
+        _showPermissionPrompt.value = false
+        if (proceedWithoutBackup) {
+            NotificationController.showInfo("未開啟備份，清空桌布時將回退至原廠預設桌布")
+            pendingApplyConfig?.let { pendingConfig ->
+                val onFinished = pendingOnFinished ?: {}
+                pendingApplyConfig = null
+                pendingOnFinished = null
+                executeApplyWallpaper(pendingConfig, onFinished)
+            }
+        } else {
+            pendingApplyConfig = null
+            pendingOnFinished = null
+        }
+    }
+
     fun applyWallpaper(config: WallpaperConfig, onFinished: () -> Unit) {
+        // 若尚未備份且未獲授權且非已由服務託管，則彈出引導
+        if (!wallpaperSystemManager.hasSnapshot() &&
+            !wallpaperPermissionManager.hasBackupPermission() &&
+            !isWallpaperServiceRunning()
+        ) {
+            pendingApplyConfig = config
+            pendingOnFinished = onFinished
+            _showPermissionPrompt.value = true
+            return
+        }
+
+        // 嘗試捕獲快照（若已授權）
+        if (!wallpaperSystemManager.hasSnapshot() && wallpaperPermissionManager.hasBackupPermission()) {
+            viewModelScope.launch {
+                wallpaperSystemManager.captureCurrentWallpaperSnapshot()
+            }
+        }
+
+        executeApplyWallpaper(config, onFinished)
+    }
+
+    private fun executeApplyWallpaper(config: WallpaperConfig, onFinished: () -> Unit) {
         viewModelScope.launch {
             val stagingFile = File(config.videoFilePath)
             val result = applyWallpaperUseCase(
@@ -213,6 +286,7 @@ class MainViewModel(
 
                 if (isServiceActive) {
                     NotificationController.showSuccess("桌布設定已即時生效")
+                    _effect.emit(MainUiEffect.ApplyWallpaperSuccess)
                     onFinished()
                 } else {
                     _effect.emit(MainUiEffect.RequestSetWallpaperIntent)
@@ -223,10 +297,17 @@ class MainViewModel(
         }
     }
 
+    fun notifyApplySuccess() {
+        viewModelScope.launch {
+            _effect.emit(MainUiEffect.ApplyWallpaperSuccess)
+        }
+    }
+
     fun getCurrentConfig(): WallpaperConfig = currentConfigSnapshot
 
     class Factory(
         private val wallpaperRepository: WallpaperRepository,
+        private val wallpaperPermissionManager: WallpaperPermissionManager,
         private val wallpaperSystemManager: WallpaperSystemManager,
         private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
         private val applyWallpaperUseCase: ApplyWallpaperUseCase,
@@ -236,6 +317,7 @@ class MainViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(
                 wallpaperRepository,
+                wallpaperPermissionManager,
                 wallpaperSystemManager,
                 processVideoSourceUseCase,
                 applyWallpaperUseCase,

@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.livewallpaper.app.domain.repository.MediaExtractor
+import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
+import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 import com.livewallpaper.app.presentation.notification.NotificationController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +19,9 @@ import java.util.Locale
 
 class SettingsViewModel(
     private val wallpaperRepository: WallpaperRepository,
-    private val mediaExtractor: MediaExtractor
+    private val mediaExtractor: MediaExtractor,
+    private val wallpaperPermissionManager: WallpaperPermissionManager,
+    private val wallpaperSystemManager: WallpaperSystemManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -45,12 +49,16 @@ class SettingsViewModel(
             // 讀取快取大小
             val (bytes, count) = mediaExtractor.getCacheStats()
             val formattedSize = formatFileSize(bytes)
+            val hasPermission = wallpaperPermissionManager.hasBackupPermission()
+            val hasSnapshot = wallpaperSystemManager.hasSnapshot()
 
             _uiState.update { current ->
                 current.copy(
                     ytDlpVersion = version,
                     cacheSizeFormatted = formattedSize,
-                    cacheFilesCount = count
+                    cacheFilesCount = count,
+                    hasBackupPermission = hasPermission,
+                    hasSnapshotBackup = hasSnapshot
                 )
             }
         }
@@ -99,11 +107,18 @@ class SettingsViewModel(
 
     class Factory(
         private val wallpaperRepository: WallpaperRepository,
-        private val mediaExtractor: MediaExtractor
+        private val mediaExtractor: MediaExtractor,
+        private val wallpaperPermissionManager: WallpaperPermissionManager,
+        private val wallpaperSystemManager: WallpaperSystemManager
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return SettingsViewModel(wallpaperRepository, mediaExtractor) as T
+            return SettingsViewModel(
+                wallpaperRepository,
+                mediaExtractor,
+                wallpaperPermissionManager,
+                wallpaperSystemManager
+            ) as T
         }
     }
 }

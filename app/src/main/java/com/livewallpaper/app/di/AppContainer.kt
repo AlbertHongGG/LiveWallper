@@ -5,10 +5,12 @@ import com.livewallpaper.app.data.datastore.WallpaperPreferencesDataSource
 import com.livewallpaper.app.data.extractor.YtDlpMediaExtractor
 import com.livewallpaper.app.data.repository.WallpaperRepositoryImpl
 import com.livewallpaper.app.data.storage.ScopedMediaStorageManager
+import com.livewallpaper.app.data.system.AndroidWallpaperPermissionManager
 import com.livewallpaper.app.data.system.AndroidWallpaperSystemManager
 import com.livewallpaper.app.domain.parser.PinterestUrlParser
 import com.livewallpaper.app.domain.repository.MediaExtractor
 import com.livewallpaper.app.domain.repository.MediaStorageManager
+import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 import com.livewallpaper.app.domain.usecase.ApplyWallpaperUseCase
@@ -53,6 +55,10 @@ class AppContainer(private val context: Context) {
         )
     }
 
+    val wallpaperPermissionManager: WallpaperPermissionManager by lazy {
+        AndroidWallpaperPermissionManager(context)
+    }
+
     val wallpaperSystemManager: WallpaperSystemManager by lazy {
         AndroidWallpaperSystemManager(context)
     }
@@ -60,7 +66,8 @@ class AppContainer(private val context: Context) {
     val applyWallpaperUseCase: ApplyWallpaperUseCase by lazy {
         ApplyWallpaperUseCase(
             storageManager = mediaStorageManager,
-            wallpaperRepository = wallpaperRepository
+            wallpaperRepository = wallpaperRepository,
+            wallpaperSystemManager = wallpaperSystemManager
         )
     }
 
