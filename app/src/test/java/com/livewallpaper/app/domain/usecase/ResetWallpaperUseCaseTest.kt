@@ -1,5 +1,7 @@
 package com.livewallpaper.app.domain.usecase
 
+import com.livewallpaper.app.domain.model.ArchivedMediaAsset
+import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
@@ -15,15 +17,21 @@ import java.io.File
 class ResetWallpaperUseCaseTest {
 
     private class FakeMediaStorageManager : MediaStorageManager {
-        var clearCount = 0
+        var clearStagingCount = 0
 
         override suspend fun prepareStagingFile(): File = File("/tmp/staging.mp4")
         override suspend fun importFromContentUri(uriString: String, destinationFile: File): Result<File> = Result.success(destinationFile)
-        override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(stagingFile)
-        override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}
-        override suspend fun clearActiveWallpapers() {
-            clearCount++
+        override suspend fun archiveMedia(sourceFile: File, frameTimeMs: Long): Result<ArchivedMediaAsset> {
+            val f = File("/data/wallpapers/videos/sample.mp4")
+            return Result.success(ArchivedMediaAsset("id", f, f, VideoMetadata(f)))
         }
+        override suspend fun deleteArchivedMedia(videoFilePath: String, thumbnailFilePath: String): Boolean = true
+        override suspend fun clearAllArchivedMedia(excludeVideoPath: String?) {}
+        override suspend fun clearStaging() {
+            clearStagingCount++
+        }
+        override suspend fun getStagingStats(): Pair<Long, Int> = Pair(0L, 0)
+        override suspend fun getArchiveStats(): Pair<Long, Int> = Pair(0L, 0)
     }
 
     private class FakeWallpaperRepository : WallpaperRepository {
@@ -62,7 +70,7 @@ class ResetWallpaperUseCaseTest {
     }
 
     @Test
-    fun `invoke should clear active files, reset videoFilePath and restore original wallpaper`() = runTest {
+    fun `invoke should clear staging files, reset videoFilePath and restore original wallpaper`() = runTest {
         val storageManager = FakeMediaStorageManager()
         val repository = FakeWallpaperRepository()
         val systemManager = FakeWallpaperSystemManager()
@@ -71,7 +79,7 @@ class ResetWallpaperUseCaseTest {
         val result = useCase()
 
         assertTrue(result.isSuccess)
-        assertEquals(1, storageManager.clearCount)
+        assertEquals(1, storageManager.clearStagingCount)
         assertEquals("", repository.current.videoFilePath)
         assertEquals(1, systemManager.restoreCount)
         assertEquals(false, systemManager.hasSnapshot())

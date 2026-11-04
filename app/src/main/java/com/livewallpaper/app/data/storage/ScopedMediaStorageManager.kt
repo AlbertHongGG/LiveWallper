@@ -2,26 +2,35 @@ package com.livewallpaper.app.data.storage
 
 import android.content.Context
 import android.net.Uri
+import com.livewallpaper.app.data.metadata.AndroidThumbnailGenerator
+import com.livewallpaper.app.data.metadata.VideoMetadataRetriever
+import com.livewallpaper.app.domain.model.ArchivedMediaAsset
 import com.livewallpaper.app.domain.model.WallpaperError
 import com.livewallpaper.app.domain.repository.MediaStorageManager
+import com.livewallpaper.app.domain.repository.ThumbnailGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 
 /**
  * 沙盒化檔案儲存管理器實作。
- * 統一管理暫存與正式動態桌布檔案，確保 I/O 安全與磁碟空間自動清理。
+ * 採用內容定址儲存 (Content-Addressed Storage, CAS)，以 SHA-256 為唯一鍵管理影片與縮圖庫。
  */
 class ScopedMediaStorageManager(
-    private val context: Context
+    private val context: Context,
+    private val thumbnailGenerator: ThumbnailGenerator = AndroidThumbnailGenerator()
 ) : MediaStorageManager {
 
     private val stagingDir: File
         get() = File(context.cacheDir, "staging").apply { if (!exists()) mkdirs() }
 
-    private val activeWallpapersDir: File
-        get() = File(context.filesDir, "wallpapers").apply { if (!exists()) mkdirs() }
+    private val archiveVideosDir: File
+        get() = File(context.filesDir, "wallpapers/videos").apply { if (!exists()) mkdirs() }
+
+    private val archiveThumbnailsDir: File
+        get() = File(context.filesDir, "wallpapers/thumbnails").apply { if (!exists()) mkdirs() }
 
     override suspend fun prepareStagingFile(): File = withContext(Dispatchers.IO) {
         try {
@@ -50,51 +59,122 @@ class ScopedMediaStorageManager(
             }
         }
 
-    override suspend fun promoteStagingToActive(stagingFile: File): Result<File> =
+    override suspend fun archiveMedia(sourceFile: File, frameTimeMs: Long): Result<ArchivedMediaAsset> =
         withContext(Dispatchers.IO) {
             runCatching {
-                if (!stagingFile.exists() || stagingFile.length() == 0L) {
-                    throw WallpaperError.StorageError("預覽暫存檔案不存在或內容為空")
+                if (!sourceFile.exists() || sourceFile.length() == 0L) {
+                    throw WallpaperError.StorageError("來源影片檔案不存在或內容為空")
                 }
 
-                // 產生帶時間戳的正式桌布檔名，確保路徑變更可作為 DataStore 變更標識
-                val timestamp = System.currentTimeMillis()
-                val targetFile = File(activeWallpapersDir, "active_wallpaper_$timestamp.mp4")
+                archiveVideosDir.mkdirs()
+                archiveThumbnailsDir.mkdirs()
 
-                stagingFile.copyTo(targetFile, overwrite = true)
+                val hash = computeSha256(sourceFile)
+                val targetVideoFile = File(archiveVideosDir, "video_$hash.mp4")
+                val targetThumbnailFile = File(archiveThumbnailsDir, "thumb_$hash.webp")
 
-                // 自動清理舊的桌布檔，只保留當前這份正式檔案
-                cleanupOldWallpapers(targetFile)
+                // 若目標影片檔案尚未存在，則將來源檔案複製進正式影片庫
+                if (!targetVideoFile.exists() || targetVideoFile.length() != sourceFile.length()) {
+                    sourceFile.copyTo(targetVideoFile, overwrite = true)
+                }
 
-                targetFile
+                // 若縮圖尚未生成，或為新剪輯時間點，則產生 WebP 縮圖
+                if (!targetThumbnailFile.exists() || targetThumbnailFile.length() == 0L) {
+                    thumbnailGenerator.generateThumbnail(
+                        videoFile = targetVideoFile,
+                        destinationFile = targetThumbnailFile,
+                        frameTimeMs = frameTimeMs
+                    ).getOrThrow()
+                }
+
+                val metadata = VideoMetadataRetriever.retrieve(targetVideoFile)
+
+                // 自動清理 staging 暫存目錄以釋放快取空間
+                clearStaging()
+
+                ArchivedMediaAsset(
+                    id = hash,
+                    videoFile = targetVideoFile,
+                    thumbnailFile = targetThumbnailFile,
+                    metadata = metadata
+                )
             }.recoverCatching { throwable ->
                 if (throwable is WallpaperError) throw throwable
-                throw WallpaperError.StorageError("套用桌布儲存失敗: ${throwable.localizedMessage}", throwable)
+                throw WallpaperError.StorageError("封存媒體資產失敗: ${throwable.localizedMessage}", throwable)
             }
         }
 
-    override suspend fun cleanupOldWallpapers(keepActiveFile: File) = withContext(Dispatchers.IO) {
+    override suspend fun deleteArchivedMedia(videoFilePath: String, thumbnailFilePath: String): Boolean =
+        withContext(Dispatchers.IO) {
+            var deleted = false
+            if (videoFilePath.isNotBlank()) {
+                val vFile = File(videoFilePath)
+                if (vFile.exists()) {
+                    deleted = vFile.delete() || deleted
+                }
+            }
+            if (thumbnailFilePath.isNotBlank()) {
+                val tFile = File(thumbnailFilePath)
+                if (tFile.exists()) {
+                    tFile.delete()
+                }
+            }
+            deleted
+        }
+
+    override suspend fun clearAllArchivedMedia(excludeVideoPath: String?): Unit = withContext(Dispatchers.IO) {
         try {
-            val allFiles = activeWallpapersDir.listFiles() ?: return@withContext
-            for (file in allFiles) {
-                if (file.absolutePath != keepActiveFile.absolutePath) {
+            val excludeCanonical = excludeVideoPath?.let { File(it).canonicalPath }
+            archiveVideosDir.listFiles()?.forEach { file ->
+                if (excludeCanonical == null || file.canonicalPath != excludeCanonical) {
                     file.delete()
                 }
             }
-            // 清理暫存檔
+            val activeHash = excludeCanonical?.substringAfterLast("video_")?.substringBeforeLast(".mp4")
+            archiveThumbnailsDir.listFiles()?.forEach { file ->
+                if (activeHash == null || !file.name.contains(activeHash)) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
+        Unit
+    }
+
+    override suspend fun clearStaging(): Unit = withContext(Dispatchers.IO) {
+        try {
             stagingDir.listFiles()?.forEach { it.delete() }
+        } catch (_: Exception) {}
+    }
+
+    override suspend fun getStagingStats(): Pair<Long, Int> = withContext(Dispatchers.IO) {
+        try {
+            val files = stagingDir.listFiles() ?: emptyArray()
+            Pair(files.sumOf { it.length() }, files.size)
         } catch (_: Exception) {
-            // 靜默處理清理異常，不阻斷核心套用流程
+            Pair(0L, 0)
         }
     }
 
-    override suspend fun clearActiveWallpapers(): Unit = withContext(Dispatchers.IO) {
+    override suspend fun getArchiveStats(): Pair<Long, Int> = withContext(Dispatchers.IO) {
         try {
-            activeWallpapersDir.listFiles()?.forEach { it.delete() }
-            stagingDir.listFiles()?.forEach { it.delete() }
+            val videoFiles = archiveVideosDir.listFiles() ?: emptyArray()
+            val thumbFiles = archiveThumbnailsDir.listFiles() ?: emptyArray()
+            val totalSize = videoFiles.sumOf { it.length() } + thumbFiles.sumOf { it.length() }
+            Pair(totalSize, videoFiles.size)
         } catch (_: Exception) {
-            // 靜默處理清理異常
+            Pair(0L, 0)
         }
-        Unit
+    }
+
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

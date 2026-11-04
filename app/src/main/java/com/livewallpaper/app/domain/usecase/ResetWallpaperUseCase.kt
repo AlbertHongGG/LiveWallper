@@ -7,9 +7,10 @@ import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 /**
  * 清空並智慧還原桌布用例。
  * 原子性依序執行：
- * 1. 清理內部沙盒檔案 (staging / active)
- * 2. 清空 DataStore 中的桌布路徑
+ * 1. 清理預覽暫存檔案 (staging)
+ * 2. 清空 DataStore 中的作用中桌布路徑
  * 3. 呼叫系統桌布管理器智慧還原使用者原有照片（無照片時優雅退回原廠預設）並解除 LiveWallpaperService 綁定
+ * 注意：絕不刪除已封存的歷史典藏檔案。
  */
 class ResetWallpaperUseCase(
     private val storageManager: MediaStorageManager,
@@ -17,8 +18,8 @@ class ResetWallpaperUseCase(
     private val wallpaperSystemManager: WallpaperSystemManager
 ) {
     suspend operator fun invoke(): Result<Unit> = runCatching {
-        // 1. 清理儲存空間中殘存的活躍桌布檔案與暫存檔案
-        storageManager.clearActiveWallpapers()
+        // 1. 清理預覽暫存檔案
+        storageManager.clearStaging()
 
         // 2. 更新配置狀態為無影片
         wallpaperRepository.updateConfig { current ->

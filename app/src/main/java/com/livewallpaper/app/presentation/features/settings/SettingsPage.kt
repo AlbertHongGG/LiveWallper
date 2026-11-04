@@ -7,16 +7,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Upgrade
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,6 +32,7 @@ import com.livewallpaper.app.presentation.components.AppSwitch
 import com.livewallpaper.app.presentation.components.ImmersiveScaffold
 import com.livewallpaper.app.presentation.components.NavigationBarsSafeSpacer
 import com.livewallpaper.app.presentation.components.PremiumConfigHeader
+import com.livewallpaper.app.presentation.components.SwipeToConfirmDrawer
 import com.livewallpaper.app.presentation.features.settings.components.SettingsDivider
 import com.livewallpaper.app.presentation.features.settings.components.SettingsSection
 import com.livewallpaper.app.presentation.features.settings.components.SettingsTile
@@ -37,6 +45,34 @@ fun SettingsPage(
     onRequestPermission: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showClearStagingDrawer by remember { mutableStateOf(false) }
+    var showClearArchiveDrawer by remember { mutableStateOf(false) }
+
+    if (showClearStagingDrawer) {
+        SwipeToConfirmDrawer(
+            title = "CLEAR STAGING CACHE",
+            sliderTitle = "SLIDE TO CLEAR CACHE",
+            confirmedTitle = "RELEASE TO CLEAR",
+            onConfirm = {
+                viewModel.clearStagingCache()
+                showClearStagingDrawer = false
+            },
+            onDismiss = { showClearStagingDrawer = false }
+        )
+    }
+
+    if (showClearArchiveDrawer) {
+        SwipeToConfirmDrawer(
+            title = "CLEAR WALLPAPER ARCHIVE",
+            sliderTitle = "SLIDE TO CLEAR ARCHIVE",
+            confirmedTitle = "RELEASE TO CLEAR",
+            onConfirm = {
+                viewModel.clearArchive(preserveActive = true)
+                showClearArchiveDrawer = false
+            },
+            onDismiss = { showClearArchiveDrawer = false }
+        )
+    }
 
     ImmersiveScaffold {
         Column(
@@ -49,7 +85,7 @@ fun SettingsPage(
                 subtitle = "SYSTEM CONFIGURATION"
             )
 
-            // 群組一：桌布體驗與系統整合（聚集所有動態桌布核心互動與系統還原防護）
+            // 群組一：桌布體驗與系統整合
             SettingsSection(title = "桌布體驗與系統整合") {
                 SettingsTile(
                     icon = Icons.Default.TouchApp,
@@ -98,7 +134,50 @@ fun SettingsPage(
                 )
             }
 
-            // 群組二：核心引擎與關於（聚集影片解析引擎更新與應用程式版本）
+            // 群組二：儲存與空間管理
+            SettingsSection(title = "儲存與空間管理") {
+                SettingsTile(
+                    icon = Icons.Default.CleaningServices,
+                    title = "暫存快取容量",
+                    subtitle = "${uiState.stagingSizeFormatted} (${uiState.stagingFilesCount} 個檔案)",
+                    trailing = {
+                        IconButton(
+                            onClick = { showClearStagingDrawer = true },
+                            enabled = uiState.stagingFilesCount > 0
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "清空暫存",
+                                tint = if (uiState.stagingFilesCount > 0) AppColors.danger else AppColors.textMuted,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                )
+
+                SettingsDivider()
+
+                SettingsTile(
+                    icon = Icons.Default.Collections,
+                    title = "歷史典藏庫容量",
+                    subtitle = "${uiState.archiveSizeFormatted} (${uiState.archiveFilesCount} 支影片)",
+                    trailing = {
+                        IconButton(
+                            onClick = { showClearArchiveDrawer = true },
+                            enabled = uiState.archiveFilesCount > 0
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "清空典藏庫",
+                                tint = if (uiState.archiveFilesCount > 0) AppColors.danger else AppColors.textMuted,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                )
+            }
+
+            // 群組三：核心引擎與關於
             SettingsSection(title = "核心引擎與關於") {
                 SettingsTile(
                     icon = Icons.Default.Upgrade,

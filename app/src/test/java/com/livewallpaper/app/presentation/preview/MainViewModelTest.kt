@@ -1,10 +1,14 @@
 package com.livewallpaper.app.presentation.preview
 
 import android.content.Intent
+import com.livewallpaper.app.domain.model.ArchivedMediaAsset
+import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.WallpaperConfig
+import com.livewallpaper.app.domain.model.WallpaperHistoryItem
 import com.livewallpaper.app.domain.parser.PinterestUrlParser
 import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.MediaStorageManager
+import com.livewallpaper.app.domain.repository.WallpaperHistoryRepository
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.repository.WallpaperSystemManager
@@ -81,9 +85,23 @@ class MainViewModelTest {
     private class FakeMediaStorageManager : MediaStorageManager {
         override suspend fun prepareStagingFile(): File = File.createTempFile("staging", ".mp4")
         override suspend fun importFromContentUri(uriString: String, destinationFile: File): Result<File> = Result.success(destinationFile)
-        override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(stagingFile)
-        override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}
-        override suspend fun clearActiveWallpapers() {}
+        override suspend fun archiveMedia(sourceFile: File, frameTimeMs: Long): Result<ArchivedMediaAsset> {
+            return Result.success(ArchivedMediaAsset("fake_hash", sourceFile, sourceFile, VideoMetadata(sourceFile)))
+        }
+        override suspend fun deleteArchivedMedia(videoFilePath: String, thumbnailFilePath: String): Boolean = true
+        override suspend fun clearAllArchivedMedia(excludeVideoPath: String?) {}
+        override suspend fun clearStaging() {}
+        override suspend fun getStagingStats(): Pair<Long, Int> = Pair(0L, 0)
+        override suspend fun getArchiveStats(): Pair<Long, Int> = Pair(0L, 0)
+    }
+
+    private class FakeWallpaperHistoryRepository : WallpaperHistoryRepository {
+        val items = mutableListOf<WallpaperHistoryItem>()
+        override val historyItems: Flow<List<WallpaperHistoryItem>> = flowOf(items)
+        override suspend fun getHistoryItems(): List<WallpaperHistoryItem> = items
+        override suspend fun recordHistory(item: WallpaperHistoryItem) { items.add(0, item) }
+        override suspend fun deleteHistoryItem(id: String) { items.removeAll { it.id == id } }
+        override suspend fun clearAllHistory(keepVideoPath: String?) { items.clear() }
     }
 
     private class FakeMediaExtractor(
@@ -108,9 +126,10 @@ class MainViewModelTest {
         val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = false }
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
+        val historyRepository = FakeWallpaperHistoryRepository()
 
         val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
-        val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager)
+        val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager, historyRepository)
         val resetUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
         val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver)
 
@@ -139,9 +158,10 @@ class MainViewModelTest {
         val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = false }
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
+        val historyRepository = FakeWallpaperHistoryRepository()
 
         val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
-        val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager)
+        val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager, historyRepository)
         val resetUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
         val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver)
 
@@ -167,9 +187,10 @@ class MainViewModelTest {
         val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = false }
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
+        val historyRepository = FakeWallpaperHistoryRepository()
 
         val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
-        val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager)
+        val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager, historyRepository)
         val resetUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
         val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver)
 
@@ -199,6 +220,7 @@ class MainViewModelTest {
         val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = true }
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
+        val historyRepository = FakeWallpaperHistoryRepository()
         val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
 
         val viewModel = MainViewModel(
@@ -206,7 +228,7 @@ class MainViewModelTest {
             wallpaperPermissionManager = permissionManager,
             wallpaperSystemManager = systemManager,
             processVideoSourceUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver),
-            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager),
+            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager, historyRepository),
             resetWallpaperUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager),
             urlResolver = resolver
         )
@@ -222,6 +244,7 @@ class MainViewModelTest {
         val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = true }
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
+        val historyRepository = FakeWallpaperHistoryRepository()
         val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
         val sampleFile = File.createTempFile("editor_sample", ".mp4")
         val fakeExtractor = FakeMediaExtractor(
@@ -236,7 +259,7 @@ class MainViewModelTest {
             wallpaperPermissionManager = permissionManager,
             wallpaperSystemManager = systemManager,
             processVideoSourceUseCase = ProcessVideoSourceUseCase(storageManager, fakeExtractor, resolver),
-            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager),
+            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager, historyRepository),
             resetWallpaperUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager),
             urlResolver = resolver
         )
@@ -259,6 +282,7 @@ class MainViewModelTest {
         val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = true }
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
+        val historyRepository = FakeWallpaperHistoryRepository()
         val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
         val fakeExtractor = FakeMediaExtractor()
 
@@ -267,7 +291,7 @@ class MainViewModelTest {
             wallpaperPermissionManager = permissionManager,
             wallpaperSystemManager = systemManager,
             processVideoSourceUseCase = ProcessVideoSourceUseCase(storageManager, fakeExtractor, resolver),
-            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager),
+            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager, historyRepository),
             resetWallpaperUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager),
             urlResolver = resolver
         )

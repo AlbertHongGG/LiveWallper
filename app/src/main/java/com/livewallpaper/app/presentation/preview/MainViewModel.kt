@@ -13,6 +13,7 @@ import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.model.WallpaperError
+import com.livewallpaper.app.domain.model.WallpaperSourceType
 import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
@@ -75,7 +76,11 @@ sealed interface MediaTaskUiState {
 sealed interface MainUiEffect {
     data object RequestSetWallpaperIntent : MainUiEffect
     data object ApplyWallpaperSuccess : MainUiEffect
-    data class NavigateToEditor(val filePath: String) : MainUiEffect
+    data class NavigateToEditor(
+        val filePath: String,
+        val sourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY,
+        val sourceUrl: String? = null
+    ) : MainUiEffect
 }
 
 class MainViewModel(
@@ -110,6 +115,8 @@ class MainViewModel(
     private var currentConfigSnapshot: WallpaperConfig = WallpaperConfig()
     private var mediaTaskJob: Job? = null
     private var pendingApplyConfig: WallpaperConfig? = null
+    private var pendingApplySourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY
+    private var pendingApplySourceUrl: String? = null
     private var pendingOnFinished: (() -> Unit)? = null
 
     init {
@@ -236,10 +243,22 @@ class MainViewModel(
 
                         is MediaTaskProgress.Completed -> {
                             _mediaTaskState.value = MediaTaskUiState.Idle
+                            val sourceUrl = if (source is VideoSource.RemoteShared) _urlInput.value.ifBlank { null } else null
                             _urlInput.value = ""
+                            val sourceType = if (source is VideoSource.LocalUri) {
+                                WallpaperSourceType.LOCAL_GALLERY
+                            } else {
+                                WallpaperSourceType.REMOTE_DOWNLOAD
+                            }
                             val successMsg = if (source is VideoSource.LocalUri) "本地影片匯入成功" else "影片解析載入成功"
                             NotificationController.showSuccess(successMsg)
-                            _effect.send(MainUiEffect.NavigateToEditor(progress.outputFile.absolutePath))
+                            _effect.send(
+                                MainUiEffect.NavigateToEditor(
+                                    filePath = progress.outputFile.absolutePath,
+                                    sourceType = sourceType,
+                                    sourceUrl = sourceUrl
+                                )
+                            )
                         }
                     }
                 }
@@ -272,9 +291,12 @@ class MainViewModel(
                     // 若有暫存的套用請求，自動繼續執行套用流程
                     pendingApplyConfig?.let { pendingConfig ->
                         val onFinished = pendingOnFinished ?: {}
+                        val sourceType = pendingApplySourceType
+                        val sourceUrl = pendingApplySourceUrl
                         pendingApplyConfig = null
                         pendingOnFinished = null
-                        executeApplyWallpaper(pendingConfig, onFinished)
+                        pendingApplySourceUrl = null
+                        executeApplyWallpaper(pendingConfig, sourceType, sourceUrl, onFinished)
                     }
                 }
             }
@@ -289,23 +311,34 @@ class MainViewModel(
             NotificationController.showInfo("未開啟備份，清空桌布時將回退至原廠預設桌布")
             pendingApplyConfig?.let { pendingConfig ->
                 val onFinished = pendingOnFinished ?: {}
+                val sourceType = pendingApplySourceType
+                val sourceUrl = pendingApplySourceUrl
                 pendingApplyConfig = null
                 pendingOnFinished = null
-                executeApplyWallpaper(pendingConfig, onFinished)
+                pendingApplySourceUrl = null
+                executeApplyWallpaper(pendingConfig, sourceType, sourceUrl, onFinished)
             }
         } else {
             pendingApplyConfig = null
             pendingOnFinished = null
+            pendingApplySourceUrl = null
         }
     }
 
-    fun applyWallpaper(config: WallpaperConfig, onFinished: () -> Unit) {
+    fun applyWallpaper(
+        config: WallpaperConfig,
+        sourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY,
+        sourceUrl: String? = null,
+        onFinished: () -> Unit
+    ) {
         // 若尚未備份且未獲授權且非已由服務託管，則彈出引導
         if (!wallpaperSystemManager.hasSnapshot() &&
             !wallpaperPermissionManager.hasBackupPermission() &&
             !isWallpaperServiceRunning()
         ) {
             pendingApplyConfig = config
+            pendingApplySourceType = sourceType
+            pendingApplySourceUrl = sourceUrl
             pendingOnFinished = onFinished
             _showPermissionPrompt.value = true
             return
@@ -318,15 +351,22 @@ class MainViewModel(
             }
         }
 
-        executeApplyWallpaper(config, onFinished)
+        executeApplyWallpaper(config, sourceType, sourceUrl, onFinished)
     }
 
-    private fun executeApplyWallpaper(config: WallpaperConfig, onFinished: () -> Unit) {
+    private fun executeApplyWallpaper(
+        config: WallpaperConfig,
+        sourceType: WallpaperSourceType = WallpaperSourceType.LOCAL_GALLERY,
+        sourceUrl: String? = null,
+        onFinished: () -> Unit
+    ) {
         viewModelScope.launch {
             val stagingFile = File(config.videoFilePath)
             val result = applyWallpaperUseCase(
-                stagingFile = stagingFile,
-                config = config
+                sourceFile = stagingFile,
+                config = config,
+                sourceType = sourceType,
+                sourceUrl = sourceUrl
             )
 
             result.onSuccess { newConfig ->

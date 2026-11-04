@@ -1,6 +1,7 @@
 package com.livewallpaper.app.di
 
 import android.content.Context
+import com.livewallpaper.app.data.datastore.WallpaperHistoryDataSource
 import com.livewallpaper.app.data.datastore.WallpaperPreferencesDataSource
 import com.livewallpaper.app.data.extractor.ResilientMediaExtractor
 import com.livewallpaper.app.data.extractor.YtDlpExtractorEngineManager
@@ -9,6 +10,7 @@ import com.livewallpaper.app.data.extractor.runner.YoutubeDlAndroidRunner
 import com.livewallpaper.app.data.extractor.runner.YtDlpRunner
 import com.livewallpaper.app.data.extractor.strategy.CompositeRequestCustomizer
 import com.livewallpaper.app.data.extractor.strategy.PinterestRequestCustomizer
+import com.livewallpaper.app.data.repository.WallpaperHistoryRepositoryImpl
 import com.livewallpaper.app.data.repository.WallpaperRepositoryImpl
 import com.livewallpaper.app.data.storage.ScopedMediaStorageManager
 import com.livewallpaper.app.data.system.AndroidWallpaperPermissionManager
@@ -18,10 +20,13 @@ import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.ExtractorEngineManager
 import com.livewallpaper.app.domain.repository.MediaExtractor
 import com.livewallpaper.app.domain.repository.MediaStorageManager
+import com.livewallpaper.app.domain.repository.WallpaperHistoryRepository
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 import com.livewallpaper.app.domain.usecase.ApplyWallpaperUseCase
+import com.livewallpaper.app.domain.usecase.ClearWallpaperHistoryUseCase
+import com.livewallpaper.app.domain.usecase.DeleteHistoryItemUseCase
 import com.livewallpaper.app.domain.usecase.ProcessVideoSourceUseCase
 import com.livewallpaper.app.domain.usecase.ResetWallpaperUseCase
 
@@ -82,6 +87,14 @@ class AppContainer(private val context: Context) {
         WallpaperRepositoryImpl(preferencesDataSource)
     }
 
+    private val historyDataSource by lazy {
+        WallpaperHistoryDataSource(context)
+    }
+
+    val wallpaperHistoryRepository: WallpaperHistoryRepository by lazy {
+        WallpaperHistoryRepositoryImpl(historyDataSource, mediaStorageManager)
+    }
+
     val processVideoSourceUseCase: ProcessVideoSourceUseCase by lazy {
         ProcessVideoSourceUseCase(
             storageManager = mediaStorageManager,
@@ -98,19 +111,36 @@ class AppContainer(private val context: Context) {
         AndroidWallpaperSystemManager(context)
     }
 
-    val applyWallpaperUseCase: ApplyWallpaperUseCase by lazy {
-        ApplyWallpaperUseCase(
+    val resetWallpaperUseCase: ResetWallpaperUseCase by lazy {
+        ResetWallpaperUseCase(
             storageManager = mediaStorageManager,
             wallpaperRepository = wallpaperRepository,
             wallpaperSystemManager = wallpaperSystemManager
         )
     }
 
-    val resetWallpaperUseCase: ResetWallpaperUseCase by lazy {
-        ResetWallpaperUseCase(
+    val applyWallpaperUseCase: ApplyWallpaperUseCase by lazy {
+        ApplyWallpaperUseCase(
             storageManager = mediaStorageManager,
             wallpaperRepository = wallpaperRepository,
-            wallpaperSystemManager = wallpaperSystemManager
+            wallpaperSystemManager = wallpaperSystemManager,
+            historyRepository = wallpaperHistoryRepository
+        )
+    }
+
+    val deleteHistoryItemUseCase: DeleteHistoryItemUseCase by lazy {
+        DeleteHistoryItemUseCase(
+            historyRepository = wallpaperHistoryRepository,
+            wallpaperRepository = wallpaperRepository,
+            resetWallpaperUseCase = resetWallpaperUseCase
+        )
+    }
+
+    val clearWallpaperHistoryUseCase: ClearWallpaperHistoryUseCase by lazy {
+        ClearWallpaperHistoryUseCase(
+            historyRepository = wallpaperHistoryRepository,
+            wallpaperRepository = wallpaperRepository,
+            resetWallpaperUseCase = resetWallpaperUseCase
         )
     }
 }

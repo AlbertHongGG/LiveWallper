@@ -15,18 +15,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import com.livewallpaper.app.LiveWallpaperApplication
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
+import com.livewallpaper.app.domain.model.WallpaperSourceType
 import com.livewallpaper.app.presentation.components.WallpaperPermissionBottomSheet
 import com.livewallpaper.app.presentation.features.editor.WallpaperEditorScreen
+import com.livewallpaper.app.presentation.features.history.HistoryGalleryScreen
+import com.livewallpaper.app.presentation.features.history.HistoryViewModel
 import com.livewallpaper.app.presentation.features.home.HomeScreen
 import com.livewallpaper.app.presentation.features.settings.SettingsPage
 import com.livewallpaper.app.presentation.features.settings.SettingsViewModel
@@ -40,7 +38,6 @@ import com.livewallpaper.app.presentation.preview.MainViewModel
 import com.livewallpaper.app.presentation.theme.AppColors
 import com.livewallpaper.app.presentation.theme.LiveWallpaperTheme
 import com.livewallpaper.app.service.VideoWallpaperService
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -62,8 +59,21 @@ class MainActivity : ComponentActivity() {
         SettingsViewModel.Factory(
             wallpaperRepository = app.container.wallpaperRepository,
             extractorEngineManager = app.container.extractorEngineManager,
+            mediaStorageManager = app.container.mediaStorageManager,
             wallpaperPermissionManager = app.container.wallpaperPermissionManager,
-            wallpaperSystemManager = app.container.wallpaperSystemManager
+            wallpaperSystemManager = app.container.wallpaperSystemManager,
+            clearWallpaperHistoryUseCase = app.container.clearWallpaperHistoryUseCase
+        )
+    }
+
+    private val historyViewModel: HistoryViewModel by viewModels {
+        val app = application as LiveWallpaperApplication
+        HistoryViewModel.Factory(
+            historyRepository = app.container.wallpaperHistoryRepository,
+            wallpaperRepository = app.container.wallpaperRepository,
+            mediaStorageManager = app.container.mediaStorageManager,
+            deleteHistoryItemUseCase = app.container.deleteHistoryItemUseCase,
+            clearWallpaperHistoryUseCase = app.container.clearWallpaperHistoryUseCase
         )
     }
 
@@ -104,7 +114,14 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             is MainUiEffect.NavigateToEditor -> {
-                                backStack.add(AppRoute.Editor(effect.filePath))
+                                backStack.add(
+                                    AppRoute.Editor(
+                                        videoPath = effect.filePath,
+                                        sourceType = effect.sourceType,
+                                        sourceUrl = effect.sourceUrl,
+                                        presetConfig = null
+                                    )
+                                )
                             }
                         }
                     }
@@ -141,30 +158,61 @@ class MainActivity : ComponentActivity() {
                                 is AppRoute.Main -> {
                                     HomeScreen(
                                         viewModel = mainViewModel,
+                                        onNavigateToHistory = {
+                                            navigator.push(AppRoute.History)
+                                        },
                                         onNavigateToSettings = {
                                             navigator.push(AppRoute.Settings)
                                         },
                                         onOpenEditor = { path ->
-                                            navigator.push(AppRoute.Editor(path))
+                                            val currentConfig = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.config
+                                                ?: mainViewModel.getCurrentConfig()
+                                            navigator.push(
+                                                AppRoute.Editor(
+                                                    videoPath = path,
+                                                    presetConfig = currentConfig
+                                                )
+                                            )
+                                        }
+                                    )
+                                }
+
+                                is AppRoute.History -> {
+                                    HistoryGalleryScreen(
+                                        viewModel = historyViewModel,
+                                        onSelectHistoryItem = { path, type, url, config ->
+                                            navigator.push(
+                                                AppRoute.Editor(
+                                                    videoPath = path,
+                                                    sourceType = type,
+                                                    sourceUrl = url,
+                                                    presetConfig = config
+                                                )
+                                            )
                                         }
                                     )
                                 }
 
                                 is AppRoute.Editor -> {
-                                    val currentConfig = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.config
-                                        ?: mainViewModel.getCurrentConfig()
-                                    val isRunning = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.isServiceActive
-                                        ?: mainViewModel.isWallpaperServiceRunning()
+                                    val initialConfig = route.presetConfig
+                                        ?: WallpaperConfig(videoFilePath = route.videoPath)
+                                    val isRunning = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.let { active ->
+                                        active.isServiceActive && active.config.videoFilePath == route.videoPath
+                                    } ?: false
 
                                     WallpaperEditorScreen(
                                         videoPath = route.videoPath,
-                                        initialConfig = currentConfig,
+                                        initialConfig = initialConfig,
                                         isServiceActive = isRunning,
                                         onDiscard = {
                                             navigator.pop()
                                         },
                                         onApply = { updatedConfig ->
-                                            mainViewModel.applyWallpaper(updatedConfig) {
+                                            mainViewModel.applyWallpaper(
+                                                config = updatedConfig,
+                                                sourceType = route.sourceType,
+                                                sourceUrl = route.sourceUrl
+                                            ) {
                                                 navigator.pop()
                                             }
                                         }
