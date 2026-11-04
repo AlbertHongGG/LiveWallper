@@ -50,11 +50,11 @@ class WallpaperPreferencesDataSource(
         }
         .map { prefs ->
             val path = prefs[KEY_VIDEO_FILE_PATH].orEmpty()
-            val scalingModeStr = prefs[KEY_SCALING_MODE] ?: ScalingMode.FIT.name
+            val scalingModeStr = prefs[KEY_SCALING_MODE] ?: ScalingMode.FILL.name
             val scalingMode = try {
                 ScalingMode.valueOf(scalingModeStr)
             } catch (_: Exception) {
-                ScalingMode.FIT
+                ScalingMode.FILL
             }
             val offset = prefs[KEY_HORIZONTAL_OFFSET] ?: 0f
             val dim = prefs[KEY_DIM_ALPHA] ?: 0f

@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class WallpaperConfig(
     val videoFilePath: String = "",
-    val scalingMode: ScalingMode = ScalingMode.FIT,
+    val scalingMode: ScalingMode = ScalingMode.FILL,
     val horizontalOffset: Float = 0f,          // -1.0f (最左) ~ 0f (置中) ~ +1.0f (最右)
     val dimAlpha: Float = 0f,                  // 0.0f ~ 0.6f 桌面壓暗遮罩
     val isMuted: Boolean = true,
