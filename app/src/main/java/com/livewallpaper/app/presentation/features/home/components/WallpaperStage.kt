@@ -1,14 +1,15 @@
 package com.livewallpaper.app.presentation.features.home.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,21 +32,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.livewallpaper.app.presentation.components.GfButton
-import com.livewallpaper.app.presentation.components.GfButtonVariant
 import com.livewallpaper.app.presentation.components.VideoPreviewSurface
 import com.livewallpaper.app.presentation.preview.WallpaperStageState
 import com.livewallpaper.app.presentation.theme.AppColors
 
 /**
  * 旗艦級桌布主舞台元件。
- * 遵循直式手機視野比例，徹底消除空白留白失衡；
- * 按鈕解耦移出預覽視窗，消除文字折行擠壓與視覺雜亂。
+ *
+ * 核心特色：
+ * 1. 視口權重自適應：填滿中央可用空間，根除下方死白空隙與重心偏上問題。
+ * 2. 徹底降噪：拔除所有重複廢話副標。
+ * 3. 純粹手勢互動：
+ *    - 輕觸預覽視窗 -> 進入編輯設定
+ *    - 長按預覽視窗 -> 震動反饋並更換影片
+ *    - 右上角叉叉 -> 一鍵清空重設退回空狀態
+ *    - 零外掛底部按鈕，100% 畫面完整歸還動態影片呈現。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WallpaperStage(
     stageState: WallpaperStageState,
@@ -55,17 +63,16 @@ fun WallpaperStage(
     onResetWallpaper: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
+    Box(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center
     ) {
         when (stageState) {
             is WallpaperStageState.Empty -> {
-                // 1. 空狀態：大比例沉浸式引導舞台
+                // 1. 空狀態：自適應沉浸引導舞台（無冗餘副標、自然垂直居中）
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(9f / 13f)
+                        .fillMaxSize()
                         .shadow(
                             elevation = 6.dp,
                             shape = RoundedCornerShape(28.dp),
@@ -80,7 +87,7 @@ fun WallpaperStage(
                         modifier = Modifier
                             .fillMaxSize()
                             .clickable(onClick = onPickLocalVideo)
-                            .padding(28.dp),
+                            .padding(horizontal = 28.dp, vertical = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
@@ -108,16 +115,6 @@ fun WallpaperStage(
                             color = AppColors.textPrimaryLight
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "從相簿選取直式影片，\n或在上方貼上 Pinterest 連結立即解析",
-                            fontSize = 14.sp,
-                            color = AppColors.textSecondaryLight,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
-
                         Spacer(modifier = Modifier.height(28.dp))
 
                         GfButton(
@@ -135,12 +132,12 @@ fun WallpaperStage(
                 val config = stageState.config
                 val metadata = stageState.metadata
                 val isRunning = stageState.isServiceActive
+                val haptics = LocalHapticFeedback.current
 
-                // 2. 活躍桌布：直式手機規格預覽卡片
+                // 2. 活躍桌布：100% 畫面完全留給影片呈現（無下方多餘按鈕）
                 Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(9f / 13.5f)
+                        .fillMaxSize()
                         .shadow(
                             elevation = 10.dp,
                             shape = RoundedCornerShape(28.dp),
@@ -169,6 +166,20 @@ fun WallpaperStage(
                                     .background(Color.Black.copy(alpha = config.dimAlpha))
                             )
                         }
+
+                        // 手勢互動層：單擊進入編輯，長按更換影片
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(28.dp))
+                                .combinedClickable(
+                                    onClick = { onOpenEditor(activeFile.absolutePath) },
+                                    onLongClick = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onPickLocalVideo()
+                                    }
+                                )
+                        )
 
                         // 頂部控制列（狀態膠囊 + 重設清空按鈕）
                         Row(
@@ -202,7 +213,7 @@ fun WallpaperStage(
                                 )
                             }
 
-                            // 清除 / 重設桌布按鈕
+                            // 清除 / 重設桌布按鈕（退回空狀態）
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
@@ -244,34 +255,6 @@ fun WallpaperStage(
                             }
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // 3. 獨立操作艙 (Detached Action Dock)
-                // 移出影片表面，徹底解決文字折行擠壓與按鈕遮擋影片問題
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    GfButton(
-                        text = "編輯樣式",
-                        leadingIcon = Icons.Default.Tune,
-                        variant = GfButtonVariant.Primary,
-                        onClick = { onOpenEditor(activeFile.absolutePath) },
-                        modifier = Modifier.weight(1f),
-                        height = 48.dp
-                    )
-
-                    GfButton(
-                        text = "更換影片",
-                        leadingIcon = Icons.Default.AddPhotoAlternate,
-                        variant = GfButtonVariant.Secondary,
-                        onClick = onPickLocalVideo,
-                        modifier = Modifier.weight(1f),
-                        height = 48.dp
-                    )
                 }
             }
         }

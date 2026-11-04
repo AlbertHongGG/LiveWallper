@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
@@ -63,9 +61,8 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // 頂部標題列
             Row(
@@ -106,7 +103,7 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Pinterest 網址解析輸入框（獨立狀態，輸入字元不觸發舞台重組）
             UrlInputField(
@@ -125,9 +122,9 @@ fun HomeScreen(
                 onCancelDownload = { viewModel.cancelDownload() }
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 直式高比例沉浸式桌布舞台 + 獨立操作艙
+            // 直式自適應沉浸舞台（填滿中央可用高度，無按鈕遮蔽，純粹手勢互動）
             WallpaperStage(
                 stageState = stageState,
                 onPickLocalVideo = {
@@ -136,10 +133,13 @@ fun HomeScreen(
                     )
                 },
                 onOpenEditor = onOpenEditor,
-                onResetWallpaper = { viewModel.resetWallpaper() }
+                onResetWallpaper = { viewModel.resetWallpaper() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             )
 
-            NavigationBarsSafeSpacer(extraHeight = 32.dp)
+            NavigationBarsSafeSpacer(extraHeight = 16.dp)
         }
     }
 }
