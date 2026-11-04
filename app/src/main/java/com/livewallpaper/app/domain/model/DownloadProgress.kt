@@ -16,6 +16,9 @@ sealed interface DownloadProgress {
         val etaText: String? = null
     ) : DownloadProgress
 
+    /** 偵測到解析組件需要自癒或升級，正在執行無縫自動修復 */
+    data class SelfHealing(val message: String = "正在自動修復解析組件...") : DownloadProgress
+
     /** 下載與轉碼完成，輸出最終影片檔案 */
     data class Completed(val outputFile: File) : DownloadProgress
 }

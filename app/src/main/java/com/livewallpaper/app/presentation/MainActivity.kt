@@ -52,7 +52,8 @@ class MainActivity : ComponentActivity() {
             wallpaperSystemManager = app.container.wallpaperSystemManager,
             processVideoSourceUseCase = app.container.processVideoSourceUseCase,
             applyWallpaperUseCase = app.container.applyWallpaperUseCase,
-            resetWallpaperUseCase = app.container.resetWallpaperUseCase
+            resetWallpaperUseCase = app.container.resetWallpaperUseCase,
+            urlResolver = app.container.sharedUrlResolver
         )
     }
 
@@ -60,7 +61,8 @@ class MainActivity : ComponentActivity() {
         val app = application as LiveWallpaperApplication
         SettingsViewModel.Factory(
             wallpaperRepository = app.container.wallpaperRepository,
-            mediaExtractor = app.container.mediaExtractor,
+            extractorEngineManager = app.container.extractorEngineManager,
+            mediaStorageManager = app.container.mediaStorageManager,
             wallpaperPermissionManager = app.container.wallpaperPermissionManager,
             wallpaperSystemManager = app.container.wallpaperSystemManager
         )
@@ -208,7 +210,7 @@ class MainActivity : ComponentActivity() {
             if (!sharedText.isNullOrBlank()) {
                 mainViewModel.updateUrlInput(sharedText)
                 mainViewModel.handleVideoSource(
-                    source = VideoSource.RemoteShared(sharedText),
+                    source = VideoSource.RemoteShared(mainViewModel.urlInput.value),
                     onReadyForEditor = { path ->
                         // 收到分享自動跳轉至 Editor
                         mainViewModel.refreshServiceStatus()

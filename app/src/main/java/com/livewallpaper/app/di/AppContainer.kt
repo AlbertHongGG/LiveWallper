@@ -2,12 +2,20 @@ package com.livewallpaper.app.di
 
 import android.content.Context
 import com.livewallpaper.app.data.datastore.WallpaperPreferencesDataSource
-import com.livewallpaper.app.data.extractor.YtDlpMediaExtractor
+import com.livewallpaper.app.data.extractor.ResilientMediaExtractor
+import com.livewallpaper.app.data.extractor.YtDlpExtractorEngineManager
+import com.livewallpaper.app.data.extractor.policy.DownloadFormatPolicy
+import com.livewallpaper.app.data.extractor.runner.YoutubeDlAndroidRunner
+import com.livewallpaper.app.data.extractor.runner.YtDlpRunner
+import com.livewallpaper.app.data.extractor.strategy.CompositeRequestCustomizer
+import com.livewallpaper.app.data.extractor.strategy.PinterestRequestCustomizer
 import com.livewallpaper.app.data.repository.WallpaperRepositoryImpl
 import com.livewallpaper.app.data.storage.ScopedMediaStorageManager
 import com.livewallpaper.app.data.system.AndroidWallpaperPermissionManager
 import com.livewallpaper.app.data.system.AndroidWallpaperSystemManager
 import com.livewallpaper.app.domain.parser.PinterestUrlParser
+import com.livewallpaper.app.domain.parser.SharedUrlResolver
+import com.livewallpaper.app.domain.repository.ExtractorEngineManager
 import com.livewallpaper.app.domain.repository.MediaExtractor
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
@@ -27,8 +35,31 @@ class AppContainer(private val context: Context) {
         ScopedMediaStorageManager(context)
     }
 
+    val extractorEngineManager: ExtractorEngineManager by lazy {
+        YtDlpExtractorEngineManager(context)
+    }
+
+    val ytDlpRunner: YtDlpRunner by lazy {
+        YoutubeDlAndroidRunner()
+    }
+
+    val downloadFormatPolicy: DownloadFormatPolicy by lazy {
+        DownloadFormatPolicy()
+    }
+
+    val requestCustomizer: CompositeRequestCustomizer by lazy {
+        CompositeRequestCustomizer(
+            customizers = listOf(PinterestRequestCustomizer())
+        )
+    }
+
     val mediaExtractor: MediaExtractor by lazy {
-        YtDlpMediaExtractor(context)
+        ResilientMediaExtractor(
+            runner = ytDlpRunner,
+            engineManager = extractorEngineManager,
+            requestCustomizer = requestCustomizer,
+            formatPolicy = downloadFormatPolicy
+        )
     }
 
     val pinterestUrlParser by lazy {
@@ -37,6 +68,10 @@ class AppContainer(private val context: Context) {
 
     val urlParsers by lazy {
         listOf(pinterestUrlParser)
+    }
+
+    val sharedUrlResolver by lazy {
+        SharedUrlResolver(urlParsers)
     }
 
     private val preferencesDataSource by lazy {
@@ -51,7 +86,7 @@ class AppContainer(private val context: Context) {
         ProcessVideoSourceUseCase(
             storageManager = mediaStorageManager,
             mediaExtractor = mediaExtractor,
-            urlParsers = urlParsers
+            urlResolver = sharedUrlResolver
         )
     }
 

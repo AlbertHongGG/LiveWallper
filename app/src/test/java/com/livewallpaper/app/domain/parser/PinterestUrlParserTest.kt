@@ -26,6 +26,14 @@ class PinterestUrlParserTest {
     }
 
     @Test
+    fun `extractCleanUrl should extract clean url from text containing emojis and preamble`() {
+        val input = "Take a look! 📌 https://pin.it/4Yg9qhT9a"
+        assertTrue(parser.canHandle(input))
+        val url = parser.extractCleanUrl(input)
+        assertEquals("https://pin.it/4Yg9qhT9a", url)
+    }
+
+    @Test
     fun `extractCleanUrl should trim punctuation at the end of url`() {
         val input = "超美動態桌布 (https://pin.it/abc123)！"
         assertTrue(parser.canHandle(input))

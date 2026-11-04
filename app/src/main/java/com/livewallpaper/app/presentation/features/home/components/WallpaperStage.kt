@@ -149,12 +149,14 @@ fun WallpaperStage(
                     border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        // 零閃爍 TextureView 影片預覽核心
+                        // 零閃爍 TextureView 影片預覽核心 (純幾何縮放引擎)
                         VideoPreviewSurface(
                             videoFile = activeFile,
                             scalingMode = config.scalingMode,
                             isMuted = true,
                             playbackSpeed = config.playbackSpeed,
+                            videoWidth = metadata?.width ?: 0,
+                            videoHeight = metadata?.height ?: 0,
                             modifier = Modifier.fillMaxSize()
                         )
 

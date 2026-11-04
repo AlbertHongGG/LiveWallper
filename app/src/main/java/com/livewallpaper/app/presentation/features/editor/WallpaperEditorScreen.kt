@@ -122,6 +122,7 @@ fun WallpaperEditorScreen(
             PhonePreviewMockup(
                 videoFile = videoFile,
                 config = config,
+                metadata = metadata,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()

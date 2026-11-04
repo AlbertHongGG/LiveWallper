@@ -24,6 +24,8 @@ class ResetWallpaperUseCaseTest {
         override suspend fun clearActiveWallpapers() {
             clearCount++
         }
+        override suspend fun getCacheStats(): Pair<Long, Int> = Pair(0L, 0)
+        override suspend fun clearCache() {}
     }
 
     private class FakeWallpaperRepository : WallpaperRepository {

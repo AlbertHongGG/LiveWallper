@@ -175,11 +175,7 @@ class WallpaperPlayerController(
     }
 
     private fun applyPlayerSettings(player: ExoPlayer, config: WallpaperConfig) {
-        player.videoScalingMode = when (config.scalingMode) {
-            ScalingMode.FILL -> C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-            ScalingMode.FIT -> C.VIDEO_SCALING_MODE_SCALE_TO_FIT
-            ScalingMode.STRETCH -> C.VIDEO_SCALING_MODE_DEFAULT
-        }
+        player.videoScalingMode = config.scalingMode.toVideoScalingMode()
 
         player.trackSelectionParameters = player.trackSelectionParameters
             .buildUpon()

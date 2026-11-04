@@ -31,4 +31,14 @@ interface MediaStorageManager {
      * 清理所有桌布與暫存檔案（重設桌布）
      */
     suspend fun clearActiveWallpapers()
+
+    /**
+     * 取得暫存快取目錄統計資訊 (總位元組大小, 檔案數量)
+     */
+    suspend fun getCacheStats(): Pair<Long, Int>
+
+    /**
+     * 清空下載與預覽暫存快取目錄
+     */
+    suspend fun clearCache()
 }

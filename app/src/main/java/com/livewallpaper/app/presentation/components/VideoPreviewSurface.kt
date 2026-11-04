@@ -5,12 +5,21 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -19,22 +28,24 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.livewallpaper.app.R
 import com.livewallpaper.app.domain.model.ScalingMode
+import com.livewallpaper.app.domain.model.VideoScalePolicy
 import java.io.File
 
 /**
- * 旗艦級硬體加速影片預覽視圖 (TextureView-backed)。
+ * 旗艦級硬體加速影片預覽視圖（搭載純幾何縮放佈局引擎）。
  *
- * 核心架構優勢：
- * 1. 底層強制使用 TextureView（透過 R.layout.view_texture_player 載入），
- *    消除 SurfaceView 造成的非同步穿孔黑屏與重組閃爍問題。
- * 2. 完美支援 Compose 的 RoundedCornerShape 剪裁、陰影與 Alpha 遮罩。
- * 3. 內建透明快門 (Transparent Shutter) 與生命週期感知，進入背景自動暫停，釋放硬體解碼負載。
+ * 核心架構突破：
+ * 1. 徹底拔除 AspectRatioFrameLayout 與 MediaCodec 雙重縮放衝突。
+ * 2. 採用 VideoScalePolicy 純數學運算，在 Compose layout 層精確計算繪製尺寸與置中位移。
+ * 3. 滿版裁切 (FILL) 鎖定原始寬高比，杜絕 Compose AndroidViewHolder 擠壓造成的垂直拉長。
+ * 4. 完美支援即時動態靜音、倍速切換與起訖時間軸剪輯循環。
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -44,6 +55,8 @@ fun VideoPreviewSurface(
     isMuted: Boolean,
     playbackSpeed: Float = 1.0f,
     modifier: Modifier = Modifier,
+    videoWidth: Int = 0,
+    videoHeight: Int = 0,
     enableTrim: Boolean = false,
     trimStartMs: Long = 0L,
     trimEndMs: Long = 0L
@@ -52,7 +65,18 @@ fun VideoPreviewSurface(
     val lifecycleOwner = LocalLifecycleOwner.current
     val videoPath = videoFile.absolutePath
 
-    // 依據絕對路徑快取播放器實例，避免多餘重建
+    // 影片真實寬高（優先取傳入之 Metadata，並由 ExoPlayer onVideoSizeChanged 實時動態校正旋轉）
+    var resolvedWidth by remember(videoPath) { mutableIntStateOf(videoWidth) }
+    var resolvedHeight by remember(videoPath) { mutableIntStateOf(videoHeight) }
+
+    LaunchedEffect(videoWidth, videoHeight) {
+        if (videoWidth > 0 && videoHeight > 0) {
+            resolvedWidth = videoWidth
+            resolvedHeight = videoHeight
+        }
+    }
+
+    // 快取播放器實例
     val exoPlayer = remember(videoPath) {
         ExoPlayer.Builder(context).build().apply {
             repeatMode = Player.REPEAT_MODE_ONE
@@ -60,6 +84,28 @@ fun VideoPreviewSurface(
             setMediaItem(mediaItem)
             prepare()
             playWhenReady = true
+        }
+    }
+
+    // 監聽影片真實解析度與旋轉度數（校正 90/270 度旋轉）
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val rotation = videoSize.unappliedRotationDegrees
+                    val (w, h) = if (rotation == 90 || rotation == 270) {
+                        videoSize.height to videoSize.width
+                    } else {
+                        videoSize.width to videoSize.height
+                    }
+                    resolvedWidth = w
+                    resolvedHeight = h
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
         }
     }
 
@@ -106,15 +152,6 @@ fun VideoPreviewSurface(
         }
     }
 
-    // 動態響應縮放模式 (MediaCodec 基礎硬體配置)
-    LaunchedEffect(scalingMode, exoPlayer) {
-        exoPlayer.videoScalingMode = when (scalingMode) {
-            ScalingMode.FILL -> C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-            ScalingMode.FIT -> C.VIDEO_SCALING_MODE_SCALE_TO_FIT
-            ScalingMode.STRETCH -> C.VIDEO_SCALING_MODE_DEFAULT
-        }
-    }
-
     // 動態靜音控制
     LaunchedEffect(isMuted, exoPlayer) {
         exoPlayer.volume = if (isMuted) 0f else 1f
@@ -138,45 +175,64 @@ fun VideoPreviewSurface(
         }
     }
 
-    val resizeMode = when (scalingMode) {
-        ScalingMode.FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-        ScalingMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-        ScalingMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-    }
+    // 純粹幾何縮放佈局器容器
+    Box(
+        modifier = modifier.clipToBounds(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .layout { measurable, constraints ->
+                    val containerW = constraints.maxWidth
+                    val containerH = constraints.maxHeight
+                    val layoutResult = VideoScalePolicy.calculate(
+                        containerWidth = containerW,
+                        containerHeight = containerH,
+                        videoWidth = resolvedWidth,
+                        videoHeight = resolvedHeight,
+                        scalingMode = scalingMode
+                    )
 
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            val playerView = LayoutInflater.from(ctx).inflate(
-                R.layout.view_texture_player,
-                null,
-                false
-            ) as PlayerView
+                    val placeable = measurable.measure(
+                        Constraints.fixed(layoutResult.targetWidth, layoutResult.targetHeight)
+                    )
 
-            playerView.apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                player = exoPlayer
-                setShutterBackgroundColor(AndroidColor.TRANSPARENT)
-                this.resizeMode = resizeMode
-            }
-        },
-        update = { view ->
-            if (view.player != exoPlayer) {
-                view.player = exoPlayer
-            }
-            if (view.resizeMode != resizeMode) {
-                view.resizeMode = resizeMode
-                // 強制觸發內部 AspectRatioFrameLayout 重新測量與佈局
-                view.findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)?.let { frame ->
-                    frame.resizeMode = resizeMode
-                    frame.requestLayout()
+                    layout(containerW, containerH) {
+                        placeable.placeRelative(layoutResult.offsetX, layoutResult.offsetY)
+                    }
                 }
-                view.requestLayout()
-                view.invalidate()
-            }
+        ) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    val playerView = LayoutInflater.from(ctx).inflate(
+                        R.layout.view_texture_player,
+                        null,
+                        false
+                    ) as PlayerView
+
+                    playerView.apply {
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                        player = exoPlayer
+                        setShutterBackgroundColor(AndroidColor.TRANSPARENT)
+                        // 讓視圖層永遠填滿經由 Compose 精確計算的 target 尺寸
+                        this.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    }
+                },
+                update = { view ->
+                    if (view.player != exoPlayer) {
+                        view.player = exoPlayer
+                    }
+                    if (view.resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FILL) {
+                        view.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        view.requestLayout()
+                    }
+                }
+            )
         }
-    )
+    }
 }

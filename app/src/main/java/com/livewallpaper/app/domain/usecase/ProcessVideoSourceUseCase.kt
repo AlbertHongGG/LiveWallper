@@ -3,7 +3,7 @@ package com.livewallpaper.app.domain.usecase
 import com.livewallpaper.app.domain.model.DownloadProgress
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperError
-import com.livewallpaper.app.domain.parser.UrlParser
+import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.MediaExtractor
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.flow
 class ProcessVideoSourceUseCase(
     private val storageManager: MediaStorageManager,
     private val mediaExtractor: MediaExtractor,
-    private val urlParsers: List<UrlParser>
+    private val urlResolver: SharedUrlResolver
 ) {
     operator fun invoke(source: VideoSource): Flow<DownloadProgress> = flow {
         val stagingFile = storageManager.getStagingVideoFile()
@@ -35,7 +35,7 @@ class ProcessVideoSourceUseCase(
 
             is VideoSource.RemoteShared -> {
                 emit(DownloadProgress.Preparing("正在辨識與正規化網址..."))
-                val cleanUrl = resolveCleanUrl(source.rawInput)
+                val cleanUrl = urlResolver.resolveCleanUrl(source.rawInput)
                     ?: throw WallpaperError.InvalidUrl(source.rawInput)
 
                 // 委託 MediaExtractor 串流下載至 staging 檔案
@@ -44,15 +44,5 @@ class ProcessVideoSourceUseCase(
                 }
             }
         }
-    }
-
-    private fun resolveCleanUrl(rawInput: String): String? {
-        for (parser in urlParsers) {
-            if (parser.canHandle(rawInput)) {
-                val clean = parser.extractCleanUrl(rawInput)
-                if (!clean.isNullOrBlank()) return clean
-            }
-        }
-        return null
     }
 }

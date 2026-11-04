@@ -36,7 +36,7 @@ fun SlidingSegmentedControl(
     onModeSelected: (ScalingMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val modes = listOf(ScalingMode.FILL, ScalingMode.FIT, ScalingMode.STRETCH)
+    val modes = ScalingMode.entries
     val selectedIndex = modes.indexOf(selectedMode).coerceAtLeast(0)
 
     BoxWithConstraints(

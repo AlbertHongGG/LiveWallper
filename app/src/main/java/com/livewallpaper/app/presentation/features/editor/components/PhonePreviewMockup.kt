@@ -15,12 +15,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.presentation.components.VideoPreviewSurface
 import java.io.File
@@ -29,10 +31,11 @@ import java.io.File
 fun PhonePreviewMockup(
     videoFile: File,
     config: WallpaperConfig,
+    metadata: VideoMetadata? = null,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
-    // 動態綁定當前設備螢幕之真實比例 (例如 20:9 或 19.5:9)，終結固定 9:16 造成縮放無差異之問題
+    // 動態綁定當前設備螢幕之真實比例 (例如 20:9 或 19.5:9)
     val deviceAspectRatio = remember(configuration.screenWidthDp, configuration.screenHeightDp) {
         val w = configuration.screenWidthDp.toFloat()
         val h = configuration.screenHeightDp.toFloat()
@@ -58,13 +61,19 @@ fun PhonePreviewMockup(
             border = BorderStroke(1.5.dp, Color(0xFFCBD5E1)),
             color = Color.Black
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(24.dp))
+            ) {
                 if (videoFile.exists()) {
                     VideoPreviewSurface(
                         videoFile = videoFile,
                         scalingMode = config.scalingMode,
                         isMuted = config.isMuted,
                         playbackSpeed = config.playbackSpeed,
+                        videoWidth = metadata?.width ?: 0,
+                        videoHeight = metadata?.height ?: 0,
                         enableTrim = config.enableTrim,
                         trimStartMs = config.trimStartMs,
                         trimEndMs = config.trimEndMs,

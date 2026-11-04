@@ -2,6 +2,8 @@ package com.livewallpaper.app.presentation.preview
 
 import android.content.Intent
 import com.livewallpaper.app.domain.model.WallpaperConfig
+import com.livewallpaper.app.domain.parser.PinterestUrlParser
+import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
@@ -80,14 +82,12 @@ class MainViewModelTest {
         override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(stagingFile)
         override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}
         override suspend fun clearActiveWallpapers() {}
+        override suspend fun getCacheStats(): Pair<Long, Int> = Pair(0L, 0)
+        override suspend fun clearCache() {}
     }
 
     private class FakeMediaExtractor : com.livewallpaper.app.domain.repository.MediaExtractor {
         override fun extractAndDownload(url: String, targetFile: File): Flow<com.livewallpaper.app.domain.model.DownloadProgress> = flowOf()
-        override suspend fun getEngineVersion(): String = "test"
-        override suspend fun updateExtractorEngine(): Result<String> = Result.success("ok")
-        override suspend fun getCacheStats(): Pair<Long, Int> = Pair(0L, 0)
-        override suspend fun clearCache() {}
     }
 
     @Before
@@ -107,9 +107,10 @@ class MainViewModelTest {
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
 
+        val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
         val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager)
         val resetUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
-        val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), emptyList())
+        val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver)
 
         val viewModel = MainViewModel(
             wallpaperRepository = repository,
@@ -117,7 +118,8 @@ class MainViewModelTest {
             wallpaperSystemManager = systemManager,
             processVideoSourceUseCase = processUseCase,
             applyWallpaperUseCase = applyUseCase,
-            resetWallpaperUseCase = resetUseCase
+            resetWallpaperUseCase = resetUseCase,
+            urlResolver = resolver
         )
 
         advanceUntilIdle()
@@ -136,9 +138,10 @@ class MainViewModelTest {
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
 
+        val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
         val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager)
         val resetUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
-        val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), emptyList())
+        val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver)
 
         val viewModel = MainViewModel(
             wallpaperRepository = repository,
@@ -146,7 +149,8 @@ class MainViewModelTest {
             wallpaperSystemManager = systemManager,
             processVideoSourceUseCase = processUseCase,
             applyWallpaperUseCase = applyUseCase,
-            resetWallpaperUseCase = resetUseCase
+            resetWallpaperUseCase = resetUseCase,
+            urlResolver = resolver
         )
 
         advanceUntilIdle()
@@ -162,9 +166,10 @@ class MainViewModelTest {
         val repository = FakeWallpaperRepository()
         val storageManager = FakeMediaStorageManager()
 
+        val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
         val applyUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager)
         val resetUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
-        val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), emptyList())
+        val processUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver)
 
         val viewModel = MainViewModel(
             wallpaperRepository = repository,
@@ -172,7 +177,8 @@ class MainViewModelTest {
             wallpaperSystemManager = systemManager,
             processVideoSourceUseCase = processUseCase,
             applyWallpaperUseCase = applyUseCase,
-            resetWallpaperUseCase = resetUseCase
+            resetWallpaperUseCase = resetUseCase,
+            urlResolver = resolver
         )
 
         val tempVideo = File.createTempFile("sample", ".mp4")
@@ -183,5 +189,28 @@ class MainViewModelTest {
         advanceUntilIdle()
 
         assertFalse(viewModel.showPermissionPrompt.value)
+    }
+
+    @Test
+    fun `updateUrlInput with messy text containing pin-it url should sanitize to clean url`() = runTest {
+        val permissionManager = FakeWallpaperPermissionManager().apply { hasPermission = true }
+        val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = true }
+        val repository = FakeWallpaperRepository()
+        val storageManager = FakeMediaStorageManager()
+        val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
+
+        val viewModel = MainViewModel(
+            wallpaperRepository = repository,
+            wallpaperPermissionManager = permissionManager,
+            wallpaperSystemManager = systemManager,
+            processVideoSourceUseCase = ProcessVideoSourceUseCase(storageManager, FakeMediaExtractor(), resolver),
+            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager),
+            resetWallpaperUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager),
+            urlResolver = resolver
+        )
+
+        viewModel.updateUrlInput("Take a look! 📌 https://pin.it/4Yg9qhT9a")
+
+        assertEquals("https://pin.it/4Yg9qhT9a", viewModel.urlInput.value)
     }
 }

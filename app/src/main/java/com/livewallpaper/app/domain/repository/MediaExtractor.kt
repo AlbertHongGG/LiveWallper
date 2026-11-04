@@ -4,14 +4,10 @@ import com.livewallpaper.app.domain.model.DownloadProgress
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 
+/**
+ * 遠端媒體解析與下載介面。
+ * 專注於依據正規化網址擷取並下載音視訊至目標檔案。
+ */
 interface MediaExtractor {
     fun extractAndDownload(url: String, targetFile: File): Flow<DownloadProgress>
-
-    suspend fun getEngineVersion(): String
-
-    suspend fun updateExtractorEngine(): Result<String>
-
-    suspend fun getCacheStats(): Pair<Long, Int>
-
-    suspend fun clearCache()
 }

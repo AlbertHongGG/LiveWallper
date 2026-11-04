@@ -10,9 +10,12 @@ sealed class WallpaperError(message: String, cause: Throwable? = null) : Excepti
     /** 該貼文並非影片（例如純圖片 Pin）或未包含可播放之串流 */
     data class UnsupportedContent(val details: String) : WallpaperError("無法取得影片內容: $details")
 
-    /** yt-dlp 下載或網路連線失敗 */
-    data class DownloadFailed(val reason: String, override val cause: Throwable? = null) :
-        WallpaperError("影片下載失敗: $reason", cause)
+    /** yt-dlp 下載或網路連線失敗，攜帶結構化之失敗類別 */
+    data class DownloadFailed(
+        val reason: String,
+        val failure: ExtractorFailure = ExtractorFailure.Unknown(reason),
+        override val cause: Throwable? = null
+    ) : WallpaperError("影片下載失敗: $reason", cause)
 
     /** 本地存取、複製或空間不足異常 */
     data class StorageError(val reason: String, override val cause: Throwable? = null) :

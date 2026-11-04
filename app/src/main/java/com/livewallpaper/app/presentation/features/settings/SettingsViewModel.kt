@@ -3,7 +3,8 @@ package com.livewallpaper.app.presentation.features.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.livewallpaper.app.domain.repository.MediaExtractor
+import com.livewallpaper.app.domain.repository.ExtractorEngineManager
+import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.repository.WallpaperSystemManager
@@ -19,7 +20,8 @@ import java.util.Locale
 
 class SettingsViewModel(
     private val wallpaperRepository: WallpaperRepository,
-    private val mediaExtractor: MediaExtractor,
+    private val extractorEngineManager: ExtractorEngineManager,
+    private val mediaStorageManager: MediaStorageManager,
     private val wallpaperPermissionManager: WallpaperPermissionManager,
     private val wallpaperSystemManager: WallpaperSystemManager
 ) : ViewModel() {
@@ -44,10 +46,10 @@ class SettingsViewModel(
 
     fun refreshStats() {
         viewModelScope.launch {
-            // 讀取 yt-dlp 版本
-            val version = mediaExtractor.getEngineVersion()
+            // 讀取 yt-dlp 核心版本
+            val version = extractorEngineManager.getEngineVersion()
             // 讀取快取大小
-            val (bytes, count) = mediaExtractor.getCacheStats()
+            val (bytes, count) = mediaStorageManager.getCacheStats()
             val formattedSize = formatFileSize(bytes)
             val hasPermission = wallpaperPermissionManager.hasBackupPermission()
             val hasSnapshot = wallpaperSystemManager.hasSnapshot()
@@ -72,7 +74,7 @@ class SettingsViewModel(
 
     fun clearCache() {
         viewModelScope.launch {
-            mediaExtractor.clearCache()
+            mediaStorageManager.clearCache()
             refreshStats()
             NotificationController.showSuccess("已清空所有下載暫存快取")
         }
@@ -84,7 +86,7 @@ class SettingsViewModel(
         NotificationController.showInfo("正在檢查並更新 YT-DLP 核心引擎...")
 
         viewModelScope.launch {
-            val result = mediaExtractor.updateExtractorEngine()
+            val result = extractorEngineManager.updateEngine()
             _uiState.update { it.copy(isUpdatingYtDlp = false) }
 
             result.onSuccess { status ->
@@ -107,7 +109,8 @@ class SettingsViewModel(
 
     class Factory(
         private val wallpaperRepository: WallpaperRepository,
-        private val mediaExtractor: MediaExtractor,
+        private val extractorEngineManager: ExtractorEngineManager,
+        private val mediaStorageManager: MediaStorageManager,
         private val wallpaperPermissionManager: WallpaperPermissionManager,
         private val wallpaperSystemManager: WallpaperSystemManager
     ) : ViewModelProvider.Factory {
@@ -115,7 +118,8 @@ class SettingsViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return SettingsViewModel(
                 wallpaperRepository,
-                mediaExtractor,
+                extractorEngineManager,
+                mediaStorageManager,
                 wallpaperPermissionManager,
                 wallpaperSystemManager
             ) as T

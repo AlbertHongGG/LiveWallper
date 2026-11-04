@@ -8,10 +8,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.livewallpaper.app.data.metadata.VideoMetadataRetriever
 import com.livewallpaper.app.domain.model.DownloadProgress
+import com.livewallpaper.app.domain.model.ExtractorFailure
 import com.livewallpaper.app.domain.model.VideoMetadata
 import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.model.WallpaperError
+import com.livewallpaper.app.domain.parser.SharedUrlResolver
 import com.livewallpaper.app.domain.repository.WallpaperPermissionManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.repository.WallpaperSystemManager
@@ -71,7 +73,8 @@ class MainViewModel(
     private val wallpaperSystemManager: WallpaperSystemManager,
     private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
     private val applyWallpaperUseCase: ApplyWallpaperUseCase,
-    private val resetWallpaperUseCase: ResetWallpaperUseCase
+    private val resetWallpaperUseCase: ResetWallpaperUseCase,
+    private val urlResolver: SharedUrlResolver
 ) : ViewModel() {
 
     // 1. 舞台狀態流（完全與暫態打字輸入解耦，杜絕打字時的舞台重組）
@@ -139,7 +142,7 @@ class MainViewModel(
     }
 
     fun updateUrlInput(text: String) {
-        _urlInput.value = text
+        _urlInput.value = urlResolver.sanitizeInput(text)
     }
 
     fun resetWallpaper() {
@@ -166,9 +169,15 @@ class MainViewModel(
             processVideoSourceUseCase(source)
                 .catch { exception ->
                     val errorMsg = when (exception) {
-                        is WallpaperError.InvalidUrl -> "未偵測到 Pinterest 影片網址"
+                        is WallpaperError.InvalidUrl -> "未偵測到有效的影片網址"
                         is WallpaperError.UnsupportedContent -> "該貼文不包含影片串流"
-                        is WallpaperError.DownloadFailed -> exception.message ?: "下載失敗"
+                        is WallpaperError.DownloadFailed -> when (exception.failure) {
+                            ExtractorFailure.EngineOutdated -> "解析引擎需要升級，請稍後重試"
+                            ExtractorFailure.FormatUnavailable -> "該貼文影片格式受限或無法取得相容串流"
+                            ExtractorFailure.NetworkUnavailable -> "網路連線異常，請確認網路後重試"
+                            ExtractorFailure.ContentUnsupported -> "該貼文不支援或屬於私密內容"
+                            is ExtractorFailure.Unknown -> exception.reason
+                        }
                         is WallpaperError.StorageError -> exception.message ?: "儲存空間異常"
                         else -> exception.localizedMessage ?: "處理失敗"
                     }
@@ -182,6 +191,14 @@ class MainViewModel(
                                 isDownloading = true,
                                 status = progress.stageMessage
                             )
+                        }
+
+                        is DownloadProgress.SelfHealing -> {
+                            _downloadState.value = DownloadUiState(
+                                isDownloading = true,
+                                status = progress.message
+                            )
+                            NotificationController.showInfo(progress.message)
                         }
 
                         is DownloadProgress.Downloading -> {
@@ -311,7 +328,8 @@ class MainViewModel(
         private val wallpaperSystemManager: WallpaperSystemManager,
         private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
         private val applyWallpaperUseCase: ApplyWallpaperUseCase,
-        private val resetWallpaperUseCase: ResetWallpaperUseCase
+        private val resetWallpaperUseCase: ResetWallpaperUseCase,
+        private val urlResolver: SharedUrlResolver
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -321,7 +339,8 @@ class MainViewModel(
                 wallpaperSystemManager,
                 processVideoSourceUseCase,
                 applyWallpaperUseCase,
-                resetWallpaperUseCase
+                resetWallpaperUseCase,
+                urlResolver
             ) as T
         }
     }
