@@ -9,7 +9,9 @@ import kotlinx.serialization.Serializable
 data class WallpaperConfig(
     val videoFilePath: String = "",
     val scalingMode: ScalingMode = ScalingMode.FILL,
-    val horizontalOffset: Float = 0f,          // -1.0f (最左) ~ 0f (置中) ~ +1.0f (最右)
+    val zoomScale: Float = 1.0f,               // 1.0f ~ 3.0f 視訊放大倍率
+    val panOffsetX: Float = 0f,                // -1.0f (最左) ~ 0f (置中) ~ +1.0f (最右)
+    val panOffsetY: Float = 0f,                // -1.0f (最上) ~ 0f (置中) ~ +1.0f (最下)
     val dimAlpha: Float = 0f,                  // 0.0f ~ 0.6f 桌面壓暗遮罩
     val isMuted: Boolean = true,
     val volume: Float = 0.5f,                  // 0.0f ~ 1.0f 音量

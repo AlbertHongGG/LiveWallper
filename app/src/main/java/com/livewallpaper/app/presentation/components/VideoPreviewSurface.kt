@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Constraints
@@ -57,6 +58,9 @@ fun VideoPreviewSurface(
     modifier: Modifier = Modifier,
     videoWidth: Int = 0,
     videoHeight: Int = 0,
+    zoomScale: Float = 1.0f,
+    panOffsetX: Float = 0f,
+    panOffsetY: Float = 0f,
     enableTrim: Boolean = false,
     trimStartMs: Long = 0L,
     trimEndMs: Long = 0L
@@ -175,6 +179,14 @@ fun VideoPreviewSurface(
         }
     }
 
+    val currentTransform = remember(zoomScale, panOffsetX, panOffsetY) {
+        com.livewallpaper.app.domain.model.ViewportTransform(
+            zoomScale = zoomScale,
+            panOffsetX = panOffsetX,
+            panOffsetY = panOffsetY
+        )
+    }
+
     // 純粹幾何縮放佈局器容器
     Box(
         modifier = modifier.clipToBounds(),
@@ -183,24 +195,41 @@ fun VideoPreviewSurface(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                // 1. Layout 階段只計算 zoom=1.0 的基礎尺寸，手勢期間 TextureView 尺寸永遠固定（0 次 Relayout）
                 .layout { measurable, constraints ->
                     val containerW = constraints.maxWidth
                     val containerH = constraints.maxHeight
-                    val layoutResult = VideoScalePolicy.calculate(
+                    val baseTransform = VideoScalePolicy.calculateSurfaceTransform(
                         containerWidth = containerW,
                         containerHeight = containerH,
                         videoWidth = resolvedWidth,
                         videoHeight = resolvedHeight,
-                        scalingMode = scalingMode
+                        scalingMode = scalingMode,
+                        transform = com.livewallpaper.app.domain.model.ViewportTransform.IDENTITY
                     )
 
                     val placeable = measurable.measure(
-                        Constraints.fixed(layoutResult.targetWidth, layoutResult.targetHeight)
+                        Constraints.fixed(baseTransform.baseWidth, baseTransform.baseHeight)
                     )
 
                     layout(containerW, containerH) {
-                        placeable.placeRelative(layoutResult.offsetX, layoutResult.offsetY)
+                        placeable.placeRelative(baseTransform.baseOffsetX, baseTransform.baseOffsetY)
                     }
+                }
+                // 2. Render 階段在 GPU RenderNode 層執行亞像素級平滑縮放與平移，徹底杜絕主執行緒掉幀
+                .graphicsLayer {
+                    val surfaceTransform = VideoScalePolicy.calculateSurfaceTransform(
+                        containerWidth = this.size.width.toInt(),
+                        containerHeight = this.size.height.toInt(),
+                        videoWidth = resolvedWidth,
+                        videoHeight = resolvedHeight,
+                        scalingMode = scalingMode,
+                        transform = currentTransform
+                    )
+                    scaleX = surfaceTransform.scale
+                    scaleY = surfaceTransform.scale
+                    translationX = surfaceTransform.translationX
+                    translationY = surfaceTransform.translationY
                 }
         ) {
             AndroidView(

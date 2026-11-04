@@ -13,7 +13,10 @@ data class WallpaperRenderState(
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
     val scalingMode: ScalingMode = ScalingMode.FILL,
-    val dimAlpha: Float = 0f
+    val dimAlpha: Float = 0f,
+    val zoomScale: Float = 1.0f,
+    val panOffsetX: Float = 0f,
+    val panOffsetY: Float = 0f
 ) {
     /**
      * 經由 dimAlpha 轉換後的著色器亮度乘數。

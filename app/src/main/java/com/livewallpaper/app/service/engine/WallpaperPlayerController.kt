@@ -179,7 +179,10 @@ class WallpaperPlayerController(
                 videoWidth = videoWidth,
                 videoHeight = videoHeight,
                 scalingMode = config.scalingMode,
-                dimAlpha = config.dimAlpha
+                dimAlpha = config.dimAlpha,
+                zoomScale = config.zoomScale,
+                panOffsetX = config.panOffsetX,
+                panOffsetY = config.panOffsetY
             )
         )
     }

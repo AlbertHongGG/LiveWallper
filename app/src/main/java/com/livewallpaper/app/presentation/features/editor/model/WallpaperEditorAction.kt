@@ -7,6 +7,7 @@ import com.livewallpaper.app.domain.model.ScalingMode
  */
 sealed interface WallpaperEditorAction {
     data class ChangeScalingMode(val mode: ScalingMode) : WallpaperEditorAction
+    data class UpdateTransform(val zoomScale: Float, val panOffsetX: Float, val panOffsetY: Float) : WallpaperEditorAction
     data class ChangeDimAlpha(val alpha: Float) : WallpaperEditorAction
     data class ChangePlaybackSpeed(val speed: Float) : WallpaperEditorAction
     data class ToggleTrim(val enabled: Boolean) : WallpaperEditorAction

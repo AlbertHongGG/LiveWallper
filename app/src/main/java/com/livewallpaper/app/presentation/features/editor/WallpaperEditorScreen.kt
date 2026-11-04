@@ -80,7 +80,17 @@ fun WallpaperEditorScreen(
     val onAction: (WallpaperEditorAction) -> Unit = remember {
         { action ->
             config = when (action) {
-                is WallpaperEditorAction.ChangeScalingMode -> config.copy(scalingMode = action.mode)
+                is WallpaperEditorAction.ChangeScalingMode -> config.copy(
+                    scalingMode = action.mode,
+                    zoomScale = 1.0f,
+                    panOffsetX = 0f,
+                    panOffsetY = 0f
+                )
+                is WallpaperEditorAction.UpdateTransform -> config.copy(
+                    zoomScale = action.zoomScale,
+                    panOffsetX = action.panOffsetX,
+                    panOffsetY = action.panOffsetY
+                )
                 is WallpaperEditorAction.ChangeDimAlpha -> config.copy(dimAlpha = action.alpha)
                 is WallpaperEditorAction.ChangePlaybackSpeed -> config.copy(playbackSpeed = action.speed)
                 is WallpaperEditorAction.ToggleTrim -> config.copy(enableTrim = action.enabled)
@@ -123,6 +133,9 @@ fun WallpaperEditorScreen(
                 videoFile = videoFile,
                 config = config,
                 metadata = metadata,
+                onTransformChanged = { zoom, panX, panY ->
+                    onAction(WallpaperEditorAction.UpdateTransform(zoom, panX, panY))
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()

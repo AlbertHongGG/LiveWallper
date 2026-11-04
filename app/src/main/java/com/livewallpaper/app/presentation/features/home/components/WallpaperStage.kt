@@ -153,6 +153,9 @@ fun WallpaperStage(
                         VideoPreviewSurface(
                             videoFile = activeFile,
                             scalingMode = config.scalingMode,
+                            zoomScale = config.zoomScale,
+                            panOffsetX = config.panOffsetX,
+                            panOffsetY = config.panOffsetY,
                             isMuted = true,
                             playbackSpeed = config.playbackSpeed,
                             videoWidth = metadata?.width ?: 0,

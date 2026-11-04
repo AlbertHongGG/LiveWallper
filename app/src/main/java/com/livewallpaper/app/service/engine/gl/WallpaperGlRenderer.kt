@@ -88,10 +88,13 @@ class WallpaperGlRenderer {
             val oldState = renderState
             renderState = newState
 
-            // 若已有紋理畫面且關鍵視覺參數（dimAlpha / scalingMode / 解析度）改變，立即觸發單次無損重繪
+            // 若已有紋理畫面且關鍵視覺參數（dimAlpha / scalingMode / zoom / pan / 解析度）改變，立即觸發單次無損重繪
             if (hasReceivedFrame && eglEnvironment.isInitialized && newState.isReadyToRender) {
                 if (oldState.dimAlpha != newState.dimAlpha ||
                     oldState.scalingMode != newState.scalingMode ||
+                    oldState.zoomScale != newState.zoomScale ||
+                    oldState.panOffsetX != newState.panOffsetX ||
+                    oldState.panOffsetY != newState.panOffsetY ||
                     oldState.videoWidth != newState.videoWidth ||
                     oldState.videoHeight != newState.videoHeight
                 ) {
@@ -210,21 +213,28 @@ class WallpaperGlRenderer {
             GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
-            // 藉由純幾何數學引擎計算 NDC Quad 縮放係數
-            val ndcScale = VideoScalePolicy.calculateNdcScale(
+            // 藉由純幾何數學引擎計算 NDC Quad 縮放與平移變換向量
+            val ndcTransform = VideoScalePolicy.calculateNdcTransform(
                 containerWidth = renderState.surfaceWidth,
                 containerHeight = renderState.surfaceHeight,
                 videoWidth = renderState.videoWidth,
                 videoHeight = renderState.videoHeight,
-                scalingMode = renderState.scalingMode
+                scalingMode = renderState.scalingMode,
+                transform = com.livewallpaper.app.domain.model.ViewportTransform(
+                    zoomScale = renderState.zoomScale,
+                    panOffsetX = renderState.panOffsetX,
+                    panOffsetY = renderState.panOffsetY
+                )
             )
 
             // 執行 GPU Quad 繪製與像素級壓暗遮罩
             shaderProgram.drawFrame(
                 textureId = textureId,
                 stMatrix = stMatrix,
-                scaleX = ndcScale.scaleX,
-                scaleY = ndcScale.scaleY,
+                scaleX = ndcTransform.scaleX,
+                scaleY = ndcTransform.scaleY,
+                translateX = ndcTransform.translateX,
+                translateY = ndcTransform.translateY,
                 brightness = renderState.brightnessMultiplier
             )
 

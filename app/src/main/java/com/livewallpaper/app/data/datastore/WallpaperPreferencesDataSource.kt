@@ -27,7 +27,9 @@ class WallpaperPreferencesDataSource(
     companion object {
         private val KEY_VIDEO_FILE_PATH = stringPreferencesKey("video_file_path")
         private val KEY_SCALING_MODE = stringPreferencesKey("scaling_mode")
-        private val KEY_HORIZONTAL_OFFSET = floatPreferencesKey("horizontal_offset")
+        private val KEY_ZOOM_SCALE = floatPreferencesKey("zoom_scale")
+        private val KEY_PAN_OFFSET_X = floatPreferencesKey("pan_offset_x")
+        private val KEY_PAN_OFFSET_Y = floatPreferencesKey("pan_offset_y")
         private val KEY_DIM_ALPHA = floatPreferencesKey("dim_alpha")
         private val KEY_IS_MUTED = booleanPreferencesKey("is_muted")
         private val KEY_VOLUME = floatPreferencesKey("volume")
@@ -56,7 +58,9 @@ class WallpaperPreferencesDataSource(
             } catch (_: Exception) {
                 ScalingMode.FILL
             }
-            val offset = prefs[KEY_HORIZONTAL_OFFSET] ?: 0f
+            val zoom = prefs[KEY_ZOOM_SCALE] ?: 1.0f
+            val panX = prefs[KEY_PAN_OFFSET_X] ?: 0f
+            val panY = prefs[KEY_PAN_OFFSET_Y] ?: 0f
             val dim = prefs[KEY_DIM_ALPHA] ?: 0f
             val isMuted = prefs[KEY_IS_MUTED] ?: true
             val volume = prefs[KEY_VOLUME] ?: 0.5f
@@ -71,7 +75,9 @@ class WallpaperPreferencesDataSource(
             WallpaperConfig(
                 videoFilePath = path,
                 scalingMode = scalingMode,
-                horizontalOffset = offset,
+                zoomScale = zoom,
+                panOffsetX = panX,
+                panOffsetY = panY,
                 dimAlpha = dim,
                 isMuted = isMuted,
                 volume = volume,
@@ -99,7 +105,9 @@ class WallpaperPreferencesDataSource(
         context.wallpaperDataStore.edit { prefs ->
             prefs[KEY_VIDEO_FILE_PATH] = config.videoFilePath
             prefs[KEY_SCALING_MODE] = config.scalingMode.name
-            prefs[KEY_HORIZONTAL_OFFSET] = config.horizontalOffset
+            prefs[KEY_ZOOM_SCALE] = config.zoomScale
+            prefs[KEY_PAN_OFFSET_X] = config.panOffsetX
+            prefs[KEY_PAN_OFFSET_Y] = config.panOffsetY
             prefs[KEY_DIM_ALPHA] = config.dimAlpha
             prefs[KEY_IS_MUTED] = config.isMuted
             prefs[KEY_VOLUME] = config.volume

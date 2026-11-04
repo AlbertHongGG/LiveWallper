@@ -20,6 +20,9 @@ class WallpaperRenderStateTest {
         assertEquals(0, state.videoHeight)
         assertEquals(ScalingMode.FILL, state.scalingMode)
         assertEquals(0f, state.dimAlpha, 0.0001f)
+        assertEquals(1.0f, state.zoomScale, 0.0001f)
+        assertEquals(0f, state.panOffsetX, 0.0001f)
+        assertEquals(0f, state.panOffsetY, 0.0001f)
         assertEquals(1.0f, state.brightnessMultiplier, 0.0001f)
         assertFalse(state.isReadyToRender)
     }

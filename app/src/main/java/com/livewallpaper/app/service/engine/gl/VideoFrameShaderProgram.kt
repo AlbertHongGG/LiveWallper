@@ -20,6 +20,7 @@ class VideoFrameShaderProgram {
     private var programHandle: Int = 0
     private var uStMatrixHandle: Int = -1
     private var uScaleHandle: Int = -1
+    private var uTranslateHandle: Int = -1
     private var uBrightnessHandle: Int = -1
     private var uTextureHandle: Int = -1
     private var aPositionHandle: Int = -1
@@ -88,6 +89,7 @@ class VideoFrameShaderProgram {
         programHandle = program
         uStMatrixHandle = GLES20.glGetUniformLocation(program, "uStMatrix")
         uScaleHandle = GLES20.glGetUniformLocation(program, "uScale")
+        uTranslateHandle = GLES20.glGetUniformLocation(program, "uTranslate")
         uBrightnessHandle = GLES20.glGetUniformLocation(program, "uBrightness")
         uTextureHandle = GLES20.glGetUniformLocation(program, "sTexture")
 
@@ -104,6 +106,8 @@ class VideoFrameShaderProgram {
      * @param stMatrix 由 SurfaceTexture.getTransformMatrix 產生之 4x4 紋理變換矩陣 (16 floats)
      * @param scaleX NDC X 軸縮放係數 (由 VideoScalePolicy 計算)
      * @param scaleY NDC Y 軸縮放係數 (由 VideoScalePolicy 計算)
+     * @param translateX NDC X 軸平移向量 (由 VideoScalePolicy 計算)
+     * @param translateY NDC Y 軸平移向量 (由 VideoScalePolicy 計算)
      * @param brightness 像素亮度乘數 (1.0 - dimAlpha)
      */
     fun drawFrame(
@@ -111,6 +115,8 @@ class VideoFrameShaderProgram {
         stMatrix: FloatArray,
         scaleX: Float,
         scaleY: Float,
+        translateX: Float = 0f,
+        translateY: Float = 0f,
         brightness: Float
     ) {
         if (!isInitialized) return
@@ -122,9 +128,10 @@ class VideoFrameShaderProgram {
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
         GLES20.glUniform1i(uTextureHandle, 0)
 
-        // 設定動態轉換矩陣與縮放/壓暗參數
+        // 設定動態轉換矩陣與縮放/平移/壓暗參數
         GLES20.glUniformMatrix4fv(uStMatrixHandle, 1, false, stMatrix, 0)
         GLES20.glUniform2f(uScaleHandle, scaleX, scaleY)
+        GLES20.glUniform2f(uTranslateHandle, translateX, translateY)
         GLES20.glUniform1f(uBrightnessHandle, brightness.coerceIn(0f, 1f))
 
         // 傳遞幾何頂點
@@ -210,12 +217,13 @@ class VideoFrameShaderProgram {
         private const val VERTEX_SHADER_CODE = """
             uniform mat4 uStMatrix;
             uniform vec2 uScale;
+            uniform vec2 uTranslate;
             attribute vec4 aPosition;
             attribute vec4 aTexCoord;
             varying vec2 vTexCoord;
 
             void main() {
-                gl_Position = vec4(aPosition.xy * uScale, aPosition.zw);
+                gl_Position = vec4(aPosition.xy * uScale + uTranslate, aPosition.zw);
                 vTexCoord = (uStMatrix * aTexCoord).xy;
             }
         """
