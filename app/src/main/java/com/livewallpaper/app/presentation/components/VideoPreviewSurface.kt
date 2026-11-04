@@ -43,7 +43,10 @@ fun VideoPreviewSurface(
     scalingMode: ScalingMode,
     isMuted: Boolean,
     playbackSpeed: Float = 1.0f,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enableTrim: Boolean = false,
+    trimStartMs: Long = 0L,
+    trimEndMs: Long = 0L
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -57,6 +60,33 @@ fun VideoPreviewSurface(
             setMediaItem(mediaItem)
             prepare()
             playWhenReady = true
+        }
+    }
+
+    // 片段剪輯設定動態同步
+    LaunchedEffect(enableTrim, trimStartMs, trimEndMs, exoPlayer) {
+        if (enableTrim && (trimStartMs > 0L || (trimEndMs > trimStartMs))) {
+            val mediaItem = MediaItem.Builder()
+                .setUri(videoFile.toURI().toString())
+                .setClippingConfiguration(
+                    MediaItem.ClippingConfiguration.Builder()
+                        .setStartPositionMs(trimStartMs)
+                        .apply {
+                            if (trimEndMs > trimStartMs) {
+                                setEndPositionMs(trimEndMs)
+                            }
+                        }
+                        .build()
+                )
+                .build()
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.play()
+        } else {
+            val mediaItem = MediaItem.fromUri(videoFile.toURI().toString())
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.play()
         }
     }
 
@@ -76,7 +106,7 @@ fun VideoPreviewSurface(
         }
     }
 
-    // 動態響應縮放模式
+    // 動態響應縮放模式 (MediaCodec 基礎硬體配置)
     LaunchedEffect(scalingMode, exoPlayer) {
         exoPlayer.videoScalingMode = when (scalingMode) {
             ScalingMode.FILL -> C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
@@ -137,7 +167,16 @@ fun VideoPreviewSurface(
             if (view.player != exoPlayer) {
                 view.player = exoPlayer
             }
-            view.resizeMode = resizeMode
+            if (view.resizeMode != resizeMode) {
+                view.resizeMode = resizeMode
+                // 強制觸發內部 AspectRatioFrameLayout 重新測量與佈局
+                view.findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)?.let { frame ->
+                    frame.resizeMode = resizeMode
+                    frame.requestLayout()
+                }
+                view.requestLayout()
+                view.invalidate()
+            }
         }
     )
 }
