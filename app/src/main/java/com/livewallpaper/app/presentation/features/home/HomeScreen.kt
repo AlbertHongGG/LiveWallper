@@ -33,7 +33,7 @@ import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.presentation.components.ImmersiveScaffold
 import com.livewallpaper.app.presentation.components.NavigationBarsSafeSpacer
 import com.livewallpaper.app.presentation.features.home.components.UrlInputField
-import com.livewallpaper.app.presentation.features.home.components.WallpaperStageCard
+import com.livewallpaper.app.presentation.features.home.components.WallpaperStage
 import com.livewallpaper.app.presentation.preview.MainViewModel
 import com.livewallpaper.app.presentation.theme.AppColors
 
@@ -43,7 +43,9 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onOpenEditor: (String) -> Unit
 ) {
-    val homeState by viewModel.homeState.collectAsState()
+    val stageState by viewModel.stageState.collectAsState()
+    val urlInput by viewModel.urlInput.collectAsState()
+    val downloadState by viewModel.downloadState.collectAsState()
 
     val videoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -104,11 +106,11 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Pinterest 網址解析輸入框
+            // Pinterest 網址解析輸入框（獨立狀態，輸入字元不觸發舞台重組）
             UrlInputField(
-                urlText = homeState.urlInput,
+                urlText = urlInput,
                 onUrlChange = { viewModel.updateUrlInput(it) },
                 onSubmitUrl = { url ->
                     viewModel.handleVideoSource(
@@ -116,26 +118,25 @@ fun HomeScreen(
                         onReadyForEditor = onOpenEditor
                     )
                 },
-                isDownloading = homeState.isDownloading,
-                downloadProgress = homeState.downloadProgress,
-                downloadStatus = homeState.downloadStatus,
-                downloadSpeed = homeState.downloadSpeed,
+                isDownloading = downloadState.isDownloading,
+                downloadProgress = downloadState.progress,
+                downloadStatus = downloadState.status,
+                downloadSpeed = downloadState.speed,
                 onCancelDownload = { viewModel.cancelDownload() }
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // 單一核心主舞台卡片
-            WallpaperStageCard(
-                activeConfig = homeState.activeConfig,
-                activeMetadata = homeState.activeMetadata,
-                isServiceActive = homeState.isServiceActive,
+            // 直式高比例沉浸式桌布舞台 + 獨立操作艙
+            WallpaperStage(
+                stageState = stageState,
                 onPickLocalVideo = {
                     videoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                     )
                 },
-                onOpenEditor = onOpenEditor
+                onOpenEditor = onOpenEditor,
+                onResetWallpaper = { viewModel.resetWallpaper() }
             )
 
             NavigationBarsSafeSpacer(extraHeight = 32.dp)

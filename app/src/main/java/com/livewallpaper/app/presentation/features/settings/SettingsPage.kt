@@ -8,7 +8,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.OfflineBolt
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Upgrade
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -68,31 +67,15 @@ fun SettingsPage(
                 subtitle = "SYSTEM CONFIGURATION"
             )
 
-            SettingsSection(title = "動態桌布與節能") {
+            SettingsSection(title = "動態桌布互動") {
                 SettingsTile(
                     icon = Icons.Default.TouchApp,
-                    iconColor = AppColors.accentIndigo,
-                    title = "桌面雙擊暫停",
-                    subtitle = "在手機桌面空白處雙擊即可暫停或恢復播放",
+                    title = "雙擊桌面暫停",
+                    subtitle = "雙擊空白處暫停播放",
                     trailing = {
                         AppSwitch(
                             checked = uiState.doubleTapToPause,
                             onCheckedChange = { viewModel.toggleDoubleTapToPause(it) }
-                        )
-                    }
-                )
-                SettingsDivider()
-                SettingsTile(
-                    icon = Icons.Default.OfflineBolt,
-                    iconColor = AppColors.success,
-                    title = "深度節能釋放延遲",
-                    subtitle = "離開桌面 ${uiState.powerSaveDelaySeconds} 秒後徹底釋放硬體解碼器",
-                    trailing = {
-                        Text(
-                            text = "${uiState.powerSaveDelaySeconds}s",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = AppColors.textSecondaryLight
                         )
                     }
                 )
@@ -101,9 +84,8 @@ fun SettingsPage(
             SettingsSection(title = "儲存與快取管理") {
                 SettingsTile(
                     icon = Icons.Default.CleaningServices,
-                    iconColor = AppColors.primary,
                     title = "暫存快取容量",
-                    subtitle = "${uiState.cacheSizeFormatted} · ${uiState.cacheFilesCount} 個暫存檔案",
+                    subtitle = "${uiState.cacheSizeFormatted} (${uiState.cacheFilesCount} 個檔案)",
                     trailing = {
                         IconButton(
                             onClick = { showClearCacheDrawer = true },
@@ -123,9 +105,8 @@ fun SettingsPage(
             SettingsSection(title = "核心引擎與關於") {
                 SettingsTile(
                     icon = Icons.Default.Upgrade,
-                    iconColor = AppColors.accentIndigo,
-                    title = "YT-DLP 核心引擎",
-                    subtitle = "點擊以線上檢查並更新解析核心",
+                    title = "YT-DLP 解析引擎",
+                    subtitle = "點擊檢查線上版本",
                     trailing = {
                         if (uiState.isUpdatingYtDlp) {
                             CircularProgressIndicator(
@@ -147,9 +128,8 @@ fun SettingsPage(
                 SettingsDivider()
                 SettingsTile(
                     icon = Icons.Default.Info,
-                    iconColor = AppColors.primary,
                     title = "應用程式版本",
-                    subtitle = "v1.0.0 (Modern Architecture)"
+                    subtitle = "v1.0.0"
                 )
             }
 

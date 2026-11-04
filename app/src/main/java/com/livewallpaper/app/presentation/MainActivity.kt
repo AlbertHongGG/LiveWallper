@@ -47,7 +47,8 @@ class MainActivity : ComponentActivity() {
             context = applicationContext,
             wallpaperRepository = app.container.wallpaperRepository,
             processVideoSourceUseCase = app.container.processVideoSourceUseCase,
-            applyWallpaperUseCase = app.container.applyWallpaperUseCase
+            applyWallpaperUseCase = app.container.applyWallpaperUseCase,
+            resetWallpaperUseCase = app.container.resetWallpaperUseCase
         )
     }
 
@@ -121,8 +122,10 @@ class MainActivity : ComponentActivity() {
                                 }
 
                                 is AppRoute.Editor -> {
-                                    val currentConfig = mainViewModel.homeState.value.activeConfig ?: WallpaperConfig()
-                                    val isRunning = mainViewModel.homeState.value.isServiceActive
+                                    val currentConfig = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.config
+                                        ?: mainViewModel.getCurrentConfig()
+                                    val isRunning = (mainViewModel.stageState.value as? com.livewallpaper.app.presentation.preview.WallpaperStageState.Active)?.isServiceActive
+                                        ?: mainViewModel.isWallpaperServiceRunning()
 
                                     WallpaperEditorScreen(
                                         videoPath = route.videoPath,

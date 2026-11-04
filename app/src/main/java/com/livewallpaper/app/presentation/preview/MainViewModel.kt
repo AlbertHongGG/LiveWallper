@@ -15,6 +15,7 @@ import com.livewallpaper.app.domain.model.WallpaperError
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.usecase.ApplyWallpaperUseCase
 import com.livewallpaper.app.domain.usecase.ProcessVideoSourceUseCase
+import com.livewallpaper.app.domain.usecase.ResetWallpaperUseCase
 import com.livewallpaper.app.presentation.notification.NotificationController
 import com.livewallpaper.app.service.VideoWallpaperService
 import kotlinx.coroutines.Job
@@ -31,15 +32,29 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
-data class HomeUiState(
-    val urlInput: String = "",
+/**
+ * 桌布核心舞台狀態機。
+ * 明確劃分「初始空狀態」與「活躍桌布就緒狀態」，杜絕狀態混亂與 Nullable 穿透。
+ */
+sealed interface WallpaperStageState {
+    data object Empty : WallpaperStageState
+
+    data class Active(
+        val videoFile: File,
+        val metadata: VideoMetadata?,
+        val config: WallpaperConfig,
+        val isServiceActive: Boolean
+    ) : WallpaperStageState
+}
+
+/**
+ * 下載與解析狀態模型。
+ */
+data class DownloadUiState(
     val isDownloading: Boolean = false,
-    val downloadProgress: Float? = null,
-    val downloadStatus: String? = null,
-    val downloadSpeed: String? = null,
-    val activeConfig: WallpaperConfig? = null,
-    val activeMetadata: VideoMetadata? = null,
-    val isServiceActive: Boolean = false
+    val progress: Float? = null,
+    val status: String? = null,
+    val speed: String? = null
 )
 
 sealed interface MainUiEffect {
@@ -51,11 +66,21 @@ class MainViewModel(
     private val context: Context,
     private val wallpaperRepository: WallpaperRepository,
     private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
-    private val applyWallpaperUseCase: ApplyWallpaperUseCase
+    private val applyWallpaperUseCase: ApplyWallpaperUseCase,
+    private val resetWallpaperUseCase: ResetWallpaperUseCase
 ) : ViewModel() {
 
-    private val _homeState = MutableStateFlow(HomeUiState())
-    val homeState: StateFlow<HomeUiState> = _homeState.asStateFlow()
+    // 1. 舞台狀態流（完全與暫態打字輸入解耦，杜絕打字時的舞台重組）
+    private val _stageState = MutableStateFlow<WallpaperStageState>(WallpaperStageState.Empty)
+    val stageState: StateFlow<WallpaperStageState> = _stageState.asStateFlow()
+
+    // 2. 獨立的 URL 輸入狀態流
+    private val _urlInput = MutableStateFlow("")
+    val urlInput: StateFlow<String> = _urlInput.asStateFlow()
+
+    // 3. 獨立的下載進度狀態流
+    private val _downloadState = MutableStateFlow(DownloadUiState())
+    val downloadState: StateFlow<DownloadUiState> = _downloadState.asStateFlow()
 
     private val _effect = MutableSharedFlow<MainUiEffect>()
     val effect: SharedFlow<MainUiEffect> = _effect.asSharedFlow()
@@ -69,17 +94,21 @@ class MainViewModel(
                 currentConfigSnapshot = config
                 val isRunning = isWallpaperServiceRunning()
 
-                val metadata = if (config.hasVideo) {
+                if (config.hasVideo) {
                     val file = File(config.videoFilePath)
-                    if (file.exists()) VideoMetadataRetriever.retrieve(file) else null
-                } else null
-
-                _homeState.update { current ->
-                    current.copy(
-                        activeConfig = config,
-                        activeMetadata = metadata,
-                        isServiceActive = isRunning
-                    )
+                    if (file.exists() && file.length() > 0L) {
+                        val metadata = VideoMetadataRetriever.retrieve(file)
+                        _stageState.value = WallpaperStageState.Active(
+                            videoFile = file,
+                            metadata = metadata,
+                            config = config,
+                            isServiceActive = isRunning
+                        )
+                    } else {
+                        _stageState.value = WallpaperStageState.Empty
+                    }
+                } else {
+                    _stageState.value = WallpaperStageState.Empty
                 }
             }
             .launchIn(viewModelScope)
@@ -94,23 +123,35 @@ class MainViewModel(
 
     fun refreshServiceStatus() {
         val running = isWallpaperServiceRunning()
-        _homeState.update { it.copy(isServiceActive = running) }
+        val current = _stageState.value
+        if (current is WallpaperStageState.Active) {
+            _stageState.value = current.copy(isServiceActive = running)
+        }
     }
 
     fun updateUrlInput(text: String) {
-        _homeState.update { it.copy(urlInput = text) }
+        _urlInput.value = text
+    }
+
+    fun resetWallpaper() {
+        viewModelScope.launch {
+            resetWallpaperUseCase()
+                .onSuccess {
+                    _stageState.value = WallpaperStageState.Empty
+                    NotificationController.showSuccess("已重設並清空當前動態桌布")
+                }
+                .onFailure { error ->
+                    NotificationController.showError("重設桌布失敗: ${error.localizedMessage}")
+                }
+        }
     }
 
     fun handleVideoSource(source: VideoSource, onReadyForEditor: (String) -> Unit) {
         downloadJob?.cancel()
-        _homeState.update {
-            it.copy(
-                isDownloading = true,
-                downloadProgress = null,
-                downloadStatus = "準備中...",
-                downloadSpeed = null
-            )
-        }
+        _downloadState.value = DownloadUiState(
+            isDownloading = true,
+            status = "準備中..."
+        )
 
         downloadJob = viewModelScope.launch {
             processVideoSourceUseCase(source)
@@ -122,39 +163,30 @@ class MainViewModel(
                         is WallpaperError.StorageError -> exception.message ?: "儲存空間異常"
                         else -> exception.localizedMessage ?: "處理失敗"
                     }
-                    _homeState.update { it.copy(isDownloading = false) }
+                    _downloadState.value = DownloadUiState(isDownloading = false)
                     NotificationController.showError(errorMsg)
                 }
                 .collect { progress ->
                     when (progress) {
                         is DownloadProgress.Preparing -> {
-                            _homeState.update {
-                                it.copy(
-                                    isDownloading = true,
-                                    downloadProgress = null,
-                                    downloadStatus = progress.stageMessage
-                                )
-                            }
+                            _downloadState.value = DownloadUiState(
+                                isDownloading = true,
+                                status = progress.stageMessage
+                            )
                         }
 
                         is DownloadProgress.Downloading -> {
-                            _homeState.update {
-                                it.copy(
-                                    isDownloading = true,
-                                    downloadProgress = progress.progressPercent,
-                                    downloadStatus = "下載中 ${progress.progressPercent.toInt()}%",
-                                    downloadSpeed = progress.speedText
-                                )
-                            }
+                            _downloadState.value = DownloadUiState(
+                                isDownloading = true,
+                                progress = progress.progressPercent,
+                                status = "下載中 ${progress.progressPercent.toInt()}%",
+                                speed = progress.speedText
+                            )
                         }
 
                         is DownloadProgress.Completed -> {
-                            _homeState.update {
-                                it.copy(
-                                    isDownloading = false,
-                                    urlInput = ""
-                                )
-                            }
+                            _downloadState.value = DownloadUiState(isDownloading = false)
+                            _urlInput.value = ""
                             NotificationController.showSuccess("影片解析載入成功")
                             onReadyForEditor(progress.outputFile.absolutePath)
                         }
@@ -165,7 +197,7 @@ class MainViewModel(
 
     fun cancelDownload() {
         downloadJob?.cancel()
-        _homeState.update { it.copy(isDownloading = false) }
+        _downloadState.value = DownloadUiState(isDownloading = false)
         NotificationController.showInfo("已取消下載")
     }
 
@@ -182,10 +214,9 @@ class MainViewModel(
                 val isServiceActive = isWallpaperServiceRunning()
 
                 if (isServiceActive) {
-                    NotificationController.showSuccess("桌布設定已即時套用生效")
+                    NotificationController.showSuccess("桌布設定已即時生效")
                     onFinished()
                 } else {
-                    // 若尚未啟用系統桌布，喚起系統對話框
                     _effect.emit(MainUiEffect.RequestSetWallpaperIntent)
                 }
             }.onFailure { throwable ->
@@ -194,11 +225,14 @@ class MainViewModel(
         }
     }
 
+    fun getCurrentConfig(): WallpaperConfig = currentConfigSnapshot
+
     class Factory(
         private val context: Context,
         private val wallpaperRepository: WallpaperRepository,
         private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
-        private val applyWallpaperUseCase: ApplyWallpaperUseCase
+        private val applyWallpaperUseCase: ApplyWallpaperUseCase,
+        private val resetWallpaperUseCase: ResetWallpaperUseCase
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -206,7 +240,8 @@ class MainViewModel(
                 context,
                 wallpaperRepository,
                 processVideoSourceUseCase,
-                applyWallpaperUseCase
+                applyWallpaperUseCase,
+                resetWallpaperUseCase
             ) as T
         }
     }

@@ -84,4 +84,14 @@ class ScopedMediaStorageManager(
             // 靜默處理清理異常，不阻斷核心套用流程
         }
     }
+
+    override suspend fun clearActiveWallpapers(): Unit = withContext(Dispatchers.IO) {
+        try {
+            activeWallpapersDir.listFiles()?.forEach { it.delete() }
+            stagingDir.listFiles()?.forEach { it.delete() }
+        } catch (_: Exception) {
+            // 靜默處理清理異常
+        }
+        Unit
+    }
 }

@@ -11,6 +11,7 @@ import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
 import com.livewallpaper.app.domain.usecase.ApplyWallpaperUseCase
 import com.livewallpaper.app.domain.usecase.ProcessVideoSourceUseCase
+import com.livewallpaper.app.domain.usecase.ResetWallpaperUseCase
 
 /**
  * 輕量且型別安全的手動依賴注入容器 (Manual Dependency Injection Container)。
@@ -52,6 +53,13 @@ class AppContainer(private val context: Context) {
 
     val applyWallpaperUseCase: ApplyWallpaperUseCase by lazy {
         ApplyWallpaperUseCase(
+            storageManager = mediaStorageManager,
+            wallpaperRepository = wallpaperRepository
+        )
+    }
+
+    val resetWallpaperUseCase: ResetWallpaperUseCase by lazy {
+        ResetWallpaperUseCase(
             storageManager = mediaStorageManager,
             wallpaperRepository = wallpaperRepository
         )

@@ -5,6 +5,5 @@ data class SettingsUiState(
     val isUpdatingYtDlp: Boolean = false,
     val cacheSizeFormatted: String = "0 B",
     val cacheFilesCount: Int = 0,
-    val doubleTapToPause: Boolean = true,
-    val powerSaveDelaySeconds: Int = 3
+    val doubleTapToPause: Boolean = true
 )

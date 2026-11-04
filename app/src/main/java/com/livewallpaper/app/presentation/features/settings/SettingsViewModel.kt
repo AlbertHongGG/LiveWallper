@@ -29,8 +29,7 @@ class SettingsViewModel(
             .onEach { config ->
                 _uiState.update { current ->
                     current.copy(
-                        doubleTapToPause = config.doubleTapToPause,
-                        powerSaveDelaySeconds = config.powerSaveDelaySeconds
+                        doubleTapToPause = config.doubleTapToPause
                     )
                 }
             }
@@ -60,12 +59,6 @@ class SettingsViewModel(
     fun toggleDoubleTapToPause(enabled: Boolean) {
         viewModelScope.launch {
             wallpaperRepository.updateConfig { it.copy(doubleTapToPause = enabled) }
-        }
-    }
-
-    fun setPowerSaveDelaySeconds(seconds: Int) {
-        viewModelScope.launch {
-            wallpaperRepository.updateConfig { it.copy(powerSaveDelaySeconds = seconds) }
         }
     }
 

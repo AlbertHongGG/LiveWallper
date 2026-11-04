@@ -102,7 +102,7 @@ fun UrlInputField(
                 Box(modifier = Modifier.weight(1f)) {
                     if (isEmpty) {
                         Text(
-                            text = "貼上 Pinterest 分享網址或文字...",
+                            text = "貼上 Pinterest 影片網址",
                             color = AppColors.textMuted,
                             fontSize = 14.sp
                         )

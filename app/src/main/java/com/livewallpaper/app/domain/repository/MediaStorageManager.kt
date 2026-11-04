@@ -26,4 +26,9 @@ interface MediaStorageManager {
      * 清理舊的歷史桌布檔案，保留目前活躍的桌布檔案
      */
     suspend fun cleanupOldWallpapers(keepActiveFile: File)
+
+    /**
+     * 清理所有桌布與暫存檔案（重設桌布）
+     */
+    suspend fun clearActiveWallpapers()
 }
