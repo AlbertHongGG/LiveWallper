@@ -20,8 +20,6 @@ class ApplyWallpaperUseCaseTest {
         override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(File("/data/wallpapers/active_123.mp4"))
         override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}
         override suspend fun clearActiveWallpapers() {}
-        override suspend fun getCacheStats(): Pair<Long, Int> = Pair(0L, 0)
-        override suspend fun clearCache() {}
     }
 
     private class FakeWallpaperRepository : WallpaperRepository {

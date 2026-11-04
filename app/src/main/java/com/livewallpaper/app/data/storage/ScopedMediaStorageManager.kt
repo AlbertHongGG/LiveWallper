@@ -97,23 +97,4 @@ class ScopedMediaStorageManager(
         }
         Unit
     }
-
-    override suspend fun getCacheStats(): Pair<Long, Int> = withContext(Dispatchers.IO) {
-        try {
-            val files = stagingDir.listFiles() ?: emptyArray()
-            val totalSize = files.sumOf { it.length() }
-            Pair(totalSize, files.size)
-        } catch (_: Exception) {
-            Pair(0L, 0)
-        }
-    }
-
-    override suspend fun clearCache(): Unit = withContext(Dispatchers.IO) {
-        try {
-            stagingDir.listFiles()?.forEach { it.delete() }
-        } catch (_: Exception) {
-            // 靜默處理清理異常
-        }
-        Unit
-    }
 }

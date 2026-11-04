@@ -84,8 +84,6 @@ class MainViewModelTest {
         override suspend fun promoteStagingToActive(stagingFile: File): Result<File> = Result.success(stagingFile)
         override suspend fun cleanupOldWallpapers(keepActiveFile: File) {}
         override suspend fun clearActiveWallpapers() {}
-        override suspend fun getCacheStats(): Pair<Long, Int> = Pair(0L, 0)
-        override suspend fun clearCache() {}
     }
 
     private class FakeMediaExtractor(

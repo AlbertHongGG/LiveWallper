@@ -7,22 +7,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Upgrade
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,7 +26,6 @@ import com.livewallpaper.app.presentation.components.AppSwitch
 import com.livewallpaper.app.presentation.components.ImmersiveScaffold
 import com.livewallpaper.app.presentation.components.NavigationBarsSafeSpacer
 import com.livewallpaper.app.presentation.components.PremiumConfigHeader
-import com.livewallpaper.app.presentation.components.SwipeToConfirmDrawer
 import com.livewallpaper.app.presentation.features.settings.components.SettingsDivider
 import com.livewallpaper.app.presentation.features.settings.components.SettingsSection
 import com.livewallpaper.app.presentation.features.settings.components.SettingsTile
@@ -44,20 +38,6 @@ fun SettingsPage(
     onRequestPermission: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showClearCacheDrawer by remember { mutableStateOf(false) }
-
-    if (showClearCacheDrawer) {
-        SwipeToConfirmDrawer(
-            title = "CLEAR CACHE",
-            sliderTitle = "SLIDE TO CLEAR",
-            confirmedTitle = "RELEASE TO CLEAR",
-            onConfirm = {
-                viewModel.clearCache()
-                showClearCacheDrawer = false
-            },
-            onDismiss = { showClearCacheDrawer = false }
-        )
-    }
 
     ImmersiveScaffold {
         Column(
@@ -114,27 +94,6 @@ fun SettingsPage(
                             checked = uiState.doubleTapToPause,
                             onCheckedChange = { viewModel.toggleDoubleTapToPause(it) }
                         )
-                    }
-                )
-            }
-
-            SettingsSection(title = "儲存與快取管理") {
-                SettingsTile(
-                    icon = Icons.Default.CleaningServices,
-                    title = "暫存快取容量",
-                    subtitle = "${uiState.cacheSizeFormatted} (${uiState.cacheFilesCount} 個檔案)",
-                    trailing = {
-                        IconButton(
-                            onClick = { showClearCacheDrawer = true },
-                            enabled = uiState.cacheFilesCount > 0
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.DeleteOutline,
-                                contentDescription = "清空快取",
-                                tint = if (uiState.cacheFilesCount > 0) AppColors.danger else AppColors.textMuted,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
                     }
                 )
             }

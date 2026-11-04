@@ -62,7 +62,6 @@ class MainActivity : ComponentActivity() {
         SettingsViewModel.Factory(
             wallpaperRepository = app.container.wallpaperRepository,
             extractorEngineManager = app.container.extractorEngineManager,
-            mediaStorageManager = app.container.mediaStorageManager,
             wallpaperPermissionManager = app.container.wallpaperPermissionManager,
             wallpaperSystemManager = app.container.wallpaperSystemManager
         )
