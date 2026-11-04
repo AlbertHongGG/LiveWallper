@@ -15,7 +15,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -86,8 +88,10 @@ class MainViewModelTest {
         override suspend fun clearCache() {}
     }
 
-    private class FakeMediaExtractor : com.livewallpaper.app.domain.repository.MediaExtractor {
-        override fun extractAndDownload(url: String, targetFile: File): Flow<com.livewallpaper.app.domain.model.DownloadProgress> = flowOf()
+    private class FakeMediaExtractor(
+        var progressFlow: Flow<com.livewallpaper.app.domain.model.DownloadProgress> = flowOf()
+    ) : com.livewallpaper.app.domain.repository.MediaExtractor {
+        override fun extractAndDownload(url: String, targetFile: File): Flow<com.livewallpaper.app.domain.model.DownloadProgress> = progressFlow
     }
 
     @Before
@@ -212,5 +216,42 @@ class MainViewModelTest {
         viewModel.updateUrlInput("Take a look! 📌 https://pin.it/4Yg9qhT9a")
 
         assertEquals("https://pin.it/4Yg9qhT9a", viewModel.urlInput.value)
+    }
+
+    @Test
+    fun `handleVideoSource emits NavigateToEditor when download completes`() = runTest {
+        val permissionManager = FakeWallpaperPermissionManager().apply { hasPermission = true }
+        val systemManager = FakeWallpaperSystemManager().apply { snapshotExists = true }
+        val repository = FakeWallpaperRepository()
+        val storageManager = FakeMediaStorageManager()
+        val resolver = SharedUrlResolver(listOf(PinterestUrlParser()))
+        val sampleFile = File.createTempFile("editor_sample", ".mp4")
+        val fakeExtractor = FakeMediaExtractor(
+            progressFlow = flowOf(
+                com.livewallpaper.app.domain.model.DownloadProgress.Preparing("準備中..."),
+                com.livewallpaper.app.domain.model.DownloadProgress.Completed(sampleFile)
+            )
+        )
+
+        val viewModel = MainViewModel(
+            wallpaperRepository = repository,
+            wallpaperPermissionManager = permissionManager,
+            wallpaperSystemManager = systemManager,
+            processVideoSourceUseCase = ProcessVideoSourceUseCase(storageManager, fakeExtractor, resolver),
+            applyWallpaperUseCase = ApplyWallpaperUseCase(storageManager, repository, systemManager),
+            resetWallpaperUseCase = ResetWallpaperUseCase(storageManager, repository, systemManager),
+            urlResolver = resolver
+        )
+
+        val effects = mutableListOf<MainUiEffect>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.effect.collect { effects.add(it) }
+        }
+
+        viewModel.handleVideoSource(com.livewallpaper.app.domain.model.VideoSource.RemoteShared("https://pin.it/1XlyxF9YU"))
+        advanceUntilIdle()
+
+        assertTrue(effects.any { it is MainUiEffect.NavigateToEditor && it.filePath == sampleFile.absolutePath })
+        job.cancel()
     }
 }

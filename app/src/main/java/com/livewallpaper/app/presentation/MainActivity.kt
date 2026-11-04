@@ -84,7 +84,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        handleIncomingIntent(intent)
+        if (savedInstanceState == null) {
+            handleIncomingIntent(intent)
+        }
 
         setContent {
             LiveWallpaperTheme {
@@ -210,12 +212,10 @@ class MainActivity : ComponentActivity() {
             if (!sharedText.isNullOrBlank()) {
                 mainViewModel.updateUrlInput(sharedText)
                 mainViewModel.handleVideoSource(
-                    source = VideoSource.RemoteShared(mainViewModel.urlInput.value),
-                    onReadyForEditor = { path ->
-                        // 收到分享自動跳轉至 Editor
-                        mainViewModel.refreshServiceStatus()
-                    }
+                    source = VideoSource.RemoteShared(mainViewModel.urlInput.value)
                 )
+                intent.removeExtra(Intent.EXTRA_TEXT)
+                intent.action = null
             }
         }
     }

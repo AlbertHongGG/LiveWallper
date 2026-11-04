@@ -23,15 +23,15 @@ import com.livewallpaper.app.domain.usecase.ResetWallpaperUseCase
 import com.livewallpaper.app.presentation.notification.NotificationController
 import com.livewallpaper.app.service.VideoWallpaperService
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -93,8 +93,8 @@ class MainViewModel(
     private val _showPermissionPrompt = MutableStateFlow(false)
     val showPermissionPrompt: StateFlow<Boolean> = _showPermissionPrompt.asStateFlow()
 
-    private val _effect = MutableSharedFlow<MainUiEffect>()
-    val effect: SharedFlow<MainUiEffect> = _effect.asSharedFlow()
+    private val _effect = Channel<MainUiEffect>(Channel.BUFFERED)
+    val effect: Flow<MainUiEffect> = _effect.receiveAsFlow()
 
     private var currentConfigSnapshot: WallpaperConfig = WallpaperConfig()
     private var downloadJob: Job? = null
@@ -158,7 +158,7 @@ class MainViewModel(
         }
     }
 
-    fun handleVideoSource(source: VideoSource, onReadyForEditor: (String) -> Unit) {
+    fun handleVideoSource(source: VideoSource) {
         downloadJob?.cancel()
         _downloadState.value = DownloadUiState(
             isDownloading = true,
@@ -216,7 +216,7 @@ class MainViewModel(
                             _downloadState.value = DownloadUiState(isDownloading = false)
                             _urlInput.value = ""
                             NotificationController.showSuccess("影片解析載入成功")
-                            onReadyForEditor(progress.outputFile.absolutePath)
+                            _effect.send(MainUiEffect.NavigateToEditor(progress.outputFile.absolutePath))
                         }
                     }
                 }
@@ -305,10 +305,10 @@ class MainViewModel(
 
                 if (isServiceActive) {
                     NotificationController.showSuccess("桌布設定已即時生效")
-                    _effect.emit(MainUiEffect.ApplyWallpaperSuccess)
+                    _effect.send(MainUiEffect.ApplyWallpaperSuccess)
                     onFinished()
                 } else {
-                    _effect.emit(MainUiEffect.RequestSetWallpaperIntent)
+                    _effect.send(MainUiEffect.RequestSetWallpaperIntent)
                 }
             }.onFailure { throwable ->
                 NotificationController.showError(throwable.localizedMessage ?: "套用桌布失敗")
@@ -318,7 +318,7 @@ class MainViewModel(
 
     fun notifyApplySuccess() {
         viewModelScope.launch {
-            _effect.emit(MainUiEffect.ApplyWallpaperSuccess)
+            _effect.send(MainUiEffect.ApplyWallpaperSuccess)
         }
     }
 

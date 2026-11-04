@@ -50,8 +50,7 @@ fun HomeScreen(
     ) { uri ->
         if (uri != null) {
             viewModel.handleVideoSource(
-                source = VideoSource.LocalUri(uri.toString()),
-                onReadyForEditor = onOpenEditor
+                source = VideoSource.LocalUri(uri.toString())
             )
         }
     }
@@ -111,8 +110,7 @@ fun HomeScreen(
                 onUrlChange = { viewModel.updateUrlInput(it) },
                 onSubmitUrl = { url ->
                     viewModel.handleVideoSource(
-                        source = VideoSource.RemoteShared(url),
-                        onReadyForEditor = onOpenEditor
+                        source = VideoSource.RemoteShared(url)
                     )
                 },
                 isDownloading = downloadState.isDownloading,
