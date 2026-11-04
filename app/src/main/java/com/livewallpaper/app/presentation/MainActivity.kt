@@ -44,8 +44,8 @@ class MainActivity : ComponentActivity() {
     private val mainViewModel: MainViewModel by viewModels {
         val app = application as LiveWallpaperApplication
         MainViewModel.Factory(
-            context = applicationContext,
             wallpaperRepository = app.container.wallpaperRepository,
+            wallpaperSystemManager = app.container.wallpaperSystemManager,
             processVideoSourceUseCase = app.container.processVideoSourceUseCase,
             applyWallpaperUseCase = app.container.applyWallpaperUseCase,
             resetWallpaperUseCase = app.container.resetWallpaperUseCase

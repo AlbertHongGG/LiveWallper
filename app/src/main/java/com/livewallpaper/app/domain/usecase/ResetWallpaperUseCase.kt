@@ -2,19 +2,30 @@ package com.livewallpaper.app.domain.usecase
 
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
+import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 
 /**
  * 清空並重設動態桌布用例。
- * 清理儲存空間中殘存的活躍桌布檔案與暫存檔案，並將 DataStore 桌布路徑重置。
+ * 原子性依序執行：
+ * 1. 清理內部沙盒檔案 (staging / active)
+ * 2. 清空 DataStore 中的桌布路徑
+ * 3. 呼叫系統桌布管理器還原系統原生桌布並解除 LiveWallpaperService 綁定
  */
 class ResetWallpaperUseCase(
     private val storageManager: MediaStorageManager,
-    private val wallpaperRepository: WallpaperRepository
+    private val wallpaperRepository: WallpaperRepository,
+    private val wallpaperSystemManager: WallpaperSystemManager
 ) {
     suspend operator fun invoke(): Result<Unit> = runCatching {
+        // 1. 清理儲存空間中殘存的活躍桌布檔案與暫存檔案
         storageManager.clearActiveWallpapers()
+
+        // 2. 更新配置狀態為無影片
         wallpaperRepository.updateConfig { current ->
             current.copy(videoFilePath = "")
         }
+
+        // 3. 解除系統桌布綁定，還原回手機系統原生預設桌布
+        wallpaperSystemManager.resetToSystemDefault().getOrThrow()
     }
 }

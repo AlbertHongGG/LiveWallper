@@ -103,6 +103,7 @@ class WallpaperPlayerController(
 
         if (!newConfig.hasVideo) {
             releasePlayerInternal(savePosition = false)
+            clearSurfaceCanvas()
             return
         }
 
@@ -140,7 +141,10 @@ class WallpaperPlayerController(
 
     private fun initAndStartPlayer(config: WallpaperConfig) {
         val file = File(config.videoFilePath)
-        if (!file.exists() || file.length() == 0L) return
+        if (!file.exists() || file.length() == 0L) {
+            clearSurfaceCanvas()
+            return
+        }
 
         val holder = currentSurfaceHolder ?: return
 
@@ -206,8 +210,23 @@ class WallpaperPlayerController(
         exoPlayer = null
     }
 
+    private fun clearSurfaceCanvas() {
+        val holder = currentSurfaceHolder ?: return
+        try {
+            val canvas = holder.lockCanvas() ?: return
+            try {
+                canvas.drawColor(android.graphics.Color.BLACK)
+            } finally {
+                holder.unlockCanvasAndPost(canvas)
+            }
+        } catch (_: Exception) {
+            // Surface 可能已處於銷毀流程中，安全忽略例外
+        }
+    }
+
     fun release() {
         deepPowerSavingJob?.cancel()
+        clearSurfaceCanvas()
         currentSurfaceHolder = null
         releasePlayerInternal(savePosition = false)
     }

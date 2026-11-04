@@ -13,6 +13,7 @@ import com.livewallpaper.app.domain.model.VideoSource
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.model.WallpaperError
 import com.livewallpaper.app.domain.repository.WallpaperRepository
+import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 import com.livewallpaper.app.domain.usecase.ApplyWallpaperUseCase
 import com.livewallpaper.app.domain.usecase.ProcessVideoSourceUseCase
 import com.livewallpaper.app.domain.usecase.ResetWallpaperUseCase
@@ -63,8 +64,8 @@ sealed interface MainUiEffect {
 }
 
 class MainViewModel(
-    private val context: Context,
     private val wallpaperRepository: WallpaperRepository,
+    private val wallpaperSystemManager: WallpaperSystemManager,
     private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
     private val applyWallpaperUseCase: ApplyWallpaperUseCase,
     private val resetWallpaperUseCase: ResetWallpaperUseCase
@@ -115,10 +116,7 @@ class MainViewModel(
     }
 
     fun isWallpaperServiceRunning(): Boolean {
-        val wallpaperManager = WallpaperManager.getInstance(context)
-        val currentInfo = wallpaperManager.wallpaperInfo ?: return false
-        val myService = ComponentName(context, VideoWallpaperService::class.java)
-        return currentInfo.component == myService
+        return wallpaperSystemManager.isWallpaperServiceActive()
     }
 
     fun refreshServiceStatus() {
@@ -228,8 +226,8 @@ class MainViewModel(
     fun getCurrentConfig(): WallpaperConfig = currentConfigSnapshot
 
     class Factory(
-        private val context: Context,
         private val wallpaperRepository: WallpaperRepository,
+        private val wallpaperSystemManager: WallpaperSystemManager,
         private val processVideoSourceUseCase: ProcessVideoSourceUseCase,
         private val applyWallpaperUseCase: ApplyWallpaperUseCase,
         private val resetWallpaperUseCase: ResetWallpaperUseCase
@@ -237,8 +235,8 @@ class MainViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(
-                context,
                 wallpaperRepository,
+                wallpaperSystemManager,
                 processVideoSourceUseCase,
                 applyWallpaperUseCase,
                 resetWallpaperUseCase

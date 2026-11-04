@@ -3,6 +3,7 @@ package com.livewallpaper.app.domain.usecase
 import com.livewallpaper.app.domain.model.WallpaperConfig
 import com.livewallpaper.app.domain.repository.MediaStorageManager
 import com.livewallpaper.app.domain.repository.WallpaperRepository
+import com.livewallpaper.app.domain.repository.WallpaperSystemManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -38,16 +39,32 @@ class ResetWallpaperUseCaseTest {
         }
     }
 
+    private class FakeWallpaperSystemManager : WallpaperSystemManager {
+        var resetCount = 0
+        var isActive = true
+
+        override suspend fun resetToSystemDefault(): Result<Unit> {
+            resetCount++
+            isActive = false
+            return Result.success(Unit)
+        }
+
+        override fun isWallpaperServiceActive(): Boolean = isActive
+    }
+
     @Test
-    fun `invoke should clear active files and reset videoFilePath to blank`() = runTest {
+    fun `invoke should clear active files, reset videoFilePath and reset system wallpaper to default`() = runTest {
         val storageManager = FakeMediaStorageManager()
         val repository = FakeWallpaperRepository()
-        val useCase = ResetWallpaperUseCase(storageManager, repository)
+        val systemManager = FakeWallpaperSystemManager()
+        val useCase = ResetWallpaperUseCase(storageManager, repository, systemManager)
 
         val result = useCase()
 
         assertTrue(result.isSuccess)
         assertEquals(1, storageManager.clearCount)
         assertEquals("", repository.current.videoFilePath)
+        assertEquals(1, systemManager.resetCount)
+        assertEquals(false, systemManager.isWallpaperServiceActive())
     }
 }
