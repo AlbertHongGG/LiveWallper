@@ -29,14 +29,16 @@ import com.livewallpaper.app.presentation.features.editor.model.WallpaperEditorU
 import java.io.File
 
 /**
- * 全新架構動態桌布配置畫面 (Wallpaper Editor Studio)。
+ * 全新動態桌布配置畫面 (Wallpaper Studio)。
  *
  * 核心特色：
- * 1. 單頁零滾動 (Zero-Scroll)：徹底拔除 verticalScroll，全內容在單一畫面完全呈現。
- * 2. 頂部藥丸套用列：右上角整合為「套用設定」按鈕，放棄變更直接右滑返回上一頁。
- * 3. 旋轉木馬設定卡片 (HorizontalPager)：分組式設定卡片，水平左右平滑滑動切換。
- * 4. 桌面級指示器 (Dots Indicator)：宛如主螢幕般的圓點指示器，支援即時高亮與點擊跳轉。
- * 5. 真機即時預覽映射：預覽視窗動態綁定設備真實螢幕比例，徹底解決填充縮放無差異問題。
+ * 1. 單頁零滾動 (Zero-Scroll)：無縱向捲動條，所有內容一次性完整呈現。
+ * 2. 5 大獨立職責卡片 (SRP)：視覺、剪輯、速度、聲音、互動徹底解耦，杜絕內容擠壓。
+ * 3. 連續無縫軌道 + 實體把手：消滅 M3 方形斷軌切口與端點雜點，滑動手感極致絲滑。
+ * 4. 無開關專業剪輯工作台：預設全片播放，拖曳即裁切，右上角支援一鍵重設。
+ * 5. 一體化音訊調音台：預設靜音，點擊喇叭一鍵靜音/復原，拖曳滑桿即時調節，常駐版面零跳動。
+ * 6. 結構化手勢互動卡片：標題副標在左，開關在右，文字極簡降噪。
+ * 7. 桌面 Launcher 圓點指示器：移除多餘文字，極致精簡優雅，支援點擊直接跳轉。
  */
 @Composable
 fun WallpaperEditorScreen(
@@ -82,7 +84,15 @@ fun WallpaperEditorScreen(
                 is WallpaperEditorAction.ChangeDimAlpha -> config.copy(dimAlpha = action.alpha)
                 is WallpaperEditorAction.ChangePlaybackSpeed -> config.copy(playbackSpeed = action.speed)
                 is WallpaperEditorAction.ToggleTrim -> config.copy(enableTrim = action.enabled)
-                is WallpaperEditorAction.UpdateTrimRange -> config.copy(trimStartMs = action.startMs, trimEndMs = action.endMs)
+                is WallpaperEditorAction.UpdateTrimRange -> {
+                    val duration = metadata?.durationMs ?: 0L
+                    val isTrimmed = action.startMs > 0L || (action.endMs > 0L && duration > 0L && action.endMs < duration)
+                    config.copy(
+                        enableTrim = isTrimmed,
+                        trimStartMs = action.startMs,
+                        trimEndMs = action.endMs
+                    )
+                }
                 is WallpaperEditorAction.ToggleMute -> config.copy(isMuted = action.isMuted)
                 is WallpaperEditorAction.ChangeVolume -> config.copy(volume = action.volume)
                 is WallpaperEditorAction.ToggleDoubleTapToPause -> config.copy(doubleTapToPause = action.enabled)
@@ -115,12 +125,12 @@ fun WallpaperEditorScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 4.dp)
+                    .padding(horizontal = 24.dp, vertical = 6.dp)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // 3. 下方旋轉木馬設定卡片 + 桌面指示器
+            // 3. 下方 5 組單一職責旋轉木馬卡片 + 極簡 Launcher 圓點指示器
             EditorSettingsCarousel(
                 state = uiState,
                 pagerState = pagerState,

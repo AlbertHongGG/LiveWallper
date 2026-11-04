@@ -60,11 +60,19 @@ fun ProTimelineSlider(
                 onRangeChange(range.start.toLong(), range.endInclusive.toLong())
             },
             valueRange = 0f..maxMs,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = AppColors.accentIndigo,
-                inactiveTrackColor = Color(0xFFE2E8F0)
-            ),
+            startThumb = { com.livewallpaper.app.presentation.components.AppSliderThumb() },
+            endThumb = { com.livewallpaper.app.presentation.components.AppSliderThumb() },
+            track = { rangeSliderState ->
+                SliderDefaults.Track(
+                    rangeSliderState = rangeSliderState,
+                    thumbTrackGapSize = 0.dp,
+                    drawStopIndicator = null,
+                    colors = SliderDefaults.colors(
+                        activeTrackColor = AppColors.accentIndigo,
+                        inactiveTrackColor = Color(0xFFE2E8F0)
+                    )
+                )
+            },
             modifier = Modifier.fillMaxWidth()
         )
     }

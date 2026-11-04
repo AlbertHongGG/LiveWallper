@@ -1,7 +1,6 @@
 package com.livewallpaper.app.presentation.features.editor.components.groups
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.livewallpaper.app.domain.model.WallpaperConfig
+import com.livewallpaper.app.presentation.components.AppSliderThumb
 import com.livewallpaper.app.presentation.features.editor.components.SlidingSegmentedControl
 import com.livewallpaper.app.presentation.features.editor.model.WallpaperEditorAction
 import com.livewallpaper.app.presentation.theme.AppColors
@@ -46,7 +46,7 @@ fun VisualSettingsCard(
                 .padding(horizontal = 18.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. 顯示填充模式分段選擇
+            // 1. 顯示填充模式
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -75,7 +75,7 @@ fun VisualSettingsCard(
                 )
             }
 
-            // 2. 桌面壓暗遮罩滑桿
+            // 2. 桌面壓暗遮罩 (流暢連續軌道，無斷軌切口)
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -100,11 +100,18 @@ fun VisualSettingsCard(
                     value = config.dimAlpha,
                     onValueChange = { onAction(WallpaperEditorAction.ChangeDimAlpha(it)) },
                     valueRange = 0f..0.6f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = AppColors.accentIndigo,
-                        inactiveTrackColor = Color(0xFFE2E8F0)
-                    ),
+                    thumb = { AppSliderThumb() },
+                    track = { sliderState ->
+                        SliderDefaults.Track(
+                            sliderState = sliderState,
+                            thumbTrackGapSize = 0.dp,
+                            drawStopIndicator = null,
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = AppColors.accentIndigo,
+                                inactiveTrackColor = Color(0xFFE2E8F0)
+                            )
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

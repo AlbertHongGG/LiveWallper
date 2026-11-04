@@ -12,8 +12,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.livewallpaper.app.presentation.features.editor.components.groups.AudioInteractionSettingsCard
-import com.livewallpaper.app.presentation.features.editor.components.groups.PlaybackSettingsCard
+import com.livewallpaper.app.presentation.features.editor.components.groups.AudioSettingsCard
+import com.livewallpaper.app.presentation.features.editor.components.groups.InteractionSettingsCard
+import com.livewallpaper.app.presentation.features.editor.components.groups.SpeedSettingsCard
+import com.livewallpaper.app.presentation.features.editor.components.groups.TrimSettingsCard
 import com.livewallpaper.app.presentation.features.editor.components.groups.VisualSettingsCard
 import com.livewallpaper.app.presentation.features.editor.model.EditorSettingGroup
 import com.livewallpaper.app.presentation.features.editor.model.WallpaperEditorAction
@@ -34,14 +36,14 @@ fun EditorSettingsCarousel(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. 旋轉木馬卡片區域 (固定高度確保單頁無滾動)
+        // 1. 旋轉木馬卡片區域 (固定高度 170dp，空間專注舒適)
         HorizontalPager(
             state = pagerState,
             contentPadding = PaddingValues(horizontal = 24.dp),
             pageSpacing = 14.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(190.dp)
+                .height(170.dp)
         ) { page ->
             when (groups[page]) {
                 EditorSettingGroup.VISUAL -> {
@@ -50,15 +52,27 @@ fun EditorSettingsCarousel(
                         onAction = onAction
                     )
                 }
-                EditorSettingGroup.PLAYBACK -> {
-                    PlaybackSettingsCard(
+                EditorSettingGroup.TRIM -> {
+                    TrimSettingsCard(
                         config = state.config,
                         durationMs = state.durationMs,
                         onAction = onAction
                     )
                 }
-                EditorSettingGroup.AUDIO_INTERACTION -> {
-                    AudioInteractionSettingsCard(
+                EditorSettingGroup.SPEED -> {
+                    SpeedSettingsCard(
+                        config = state.config,
+                        onAction = onAction
+                    )
+                }
+                EditorSettingGroup.AUDIO -> {
+                    AudioSettingsCard(
+                        config = state.config,
+                        onAction = onAction
+                    )
+                }
+                EditorSettingGroup.INTERACTION -> {
+                    InteractionSettingsCard(
                         config = state.config,
                         onAction = onAction
                     )
@@ -68,11 +82,10 @@ fun EditorSettingsCarousel(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // 2. 桌面級分頁指示器 (點點點)
+        // 2. 極簡桌面 Launcher 圓點指示器 (純圓點，無冗餘文字，支援 Tap to Jump)
         EditorPageIndicator(
             pageCount = groups.size,
             currentPage = pagerState.currentPage,
-            currentGroup = groups[pagerState.currentPage],
             onSelectPage = { targetPage ->
                 coroutineScope.launch {
                     pagerState.animateScrollToPage(targetPage)
